@@ -7,7 +7,7 @@
 | Path | What | Licence |
 |------|------|---------|
 | `docker/` | the Dockerfile and `ns3-build-contrib` | `MIT OR GPL-2.0-only` |
-| `test/smoke.sh`, `test/run.sh` | the image smoke test and the test-stage runner | `MIT OR GPL-2.0-only` |
+| `test/*.sh` | the test-stage runner and its stages | `MIT OR GPL-2.0-only` |
 | `tools/` | the matrix generator and its tests | `MIT OR GPL-2.0-only` |
 | `.github/workflows/` | image publishing and CI | `MIT OR GPL-2.0-only` |
 | `test/fixtures/` | the smoke fixture, an ns-3 contrib module | `GPL-2.0-only` |

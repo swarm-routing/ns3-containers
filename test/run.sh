@@ -13,6 +13,10 @@
 # with this repository mounted read-only at /src, so no stage sees another's
 # changes and the image itself is never modified.
 #
+# EXPECT_VERSION, EXPECT_PROFILE and EXPECT_OS (the pipeline's matrix entry)
+# are passed to the stages that compare against them; unset, those
+# comparisons are skipped and say so.
+#
 # The same stages run for every image the pipeline builds: the supported
 # release and on-demand older releases alike (ns3-containers#36). A stage that
 # cannot apply to a release says SKIP (<reason>); it never passes silently.
@@ -44,7 +48,32 @@ stage() {
     fi
 }
 
-in_image() { docker run --rm -v "$repo:/src:ro" "$image" "$@"; }
+in_image() {
+    docker run --rm -v "$repo:/src:ro" \
+        -e EXPECT_VERSION="${EXPECT_VERSION:-}" -e EXPECT_PROFILE="${EXPECT_PROFILE:-}" \
+        -e EXPECT_OS="${EXPECT_OS:-}" "$image" "$@"
+}
+
+# OCI labels, read from the image config on the runner (ns3-containers#39).
+labels() {
+    local fails=0 key want got
+    for pair in "org.opencontainers.image.source=https://github.com/swarm-routing/ns3-containers" \
+                "org.opencontainers.image.licenses=GPL-2.0-only" \
+                "org.opencontainers.image.version=${EXPECT_VERSION:-}" \
+                "io.github.swarm-routing.ns3.profile=${EXPECT_PROFILE:-}" \
+                "io.github.swarm-routing.ns3.base=${EXPECT_OS:-}"; do
+        key=${pair%%=*}; want=${pair#*=}
+        got=$(docker image inspect --format "{{ index .Config.Labels \"$key\" }}" "$image")
+        if [ -z "$want" ]; then
+            echo "  SKIP  $key=$got (nothing to compare)"
+        elif [ "$got" = "$want" ]; then
+            echo "  ok    $key=$got"
+        else
+            echo "  FAIL  $key='$got', expected '$want'" >&2; fails=$((fails + 1))
+        fi
+    done
+    [ "$fails" -eq 0 ]
+}
 
 {
     echo "### Tests on \`$image\`"
@@ -53,4 +82,6 @@ in_image() { docker run --rm -v "$repo:/src:ro" "$image" "$@"; }
     echo "|---|---|---|"
 } >> "$summary"
 
+stage labels labels
+stage structure in_image bash /src/test/structure.sh
 stage smoke in_image bash /src/test/smoke.sh

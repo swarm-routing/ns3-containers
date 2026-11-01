@@ -165,6 +165,9 @@ jobs:
         if: env.WRITE_REGISTRY != 'true'
         env:
           NAME: ${{ matrix.name }}
+          EXPECT_VERSION: ${{ matrix.version }}
+          EXPECT_PROFILE: ${{ matrix.profile }}
+          EXPECT_OS: ${{ matrix.os }}
         run: test/run.sh "ns3-dev-local:${NAME}"
 
   test:
@@ -203,6 +206,9 @@ jobs:
       - name: Test stages
         env:
           REF: ${{ steps.pull.outputs.ref }}
+          EXPECT_VERSION: ${{ matrix.version }}
+          EXPECT_PROFILE: ${{ matrix.profile }}
+          EXPECT_OS: ${{ matrix.os }}
         run: test/run.sh "$REF"
       - name: Mark as passed
         run: mkdir -p pass && cp marker/digest pass/digest
