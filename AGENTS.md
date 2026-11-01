@@ -25,6 +25,7 @@ test/smoke.sh                     image smoke (incremental build + test.py + gua
 test/fixtures/swarm-hello/        minimal contrib module (C++17..C++23) used by the smoke (GPL-2.0-only: an ns-3 module)
 .github/workflows/publish-images.yml   resolve matrix -> build -> smoke -> push (main) -> sign -> attest; weekly new releases
 .github/workflows/licence.yml     licence headers (tooling MIT OR GPL-2.0-only, rest GPL-2.0-only)
+.github/ISSUE_TEMPLATE/           the org's forms (copied: a repo folder replaces the org defaults) + image-request.yml
 ```
 
 ## Build & verify
@@ -131,6 +132,7 @@ Org-wide (1–9), then this repo's own.
 |--------------|-------|
 | Add an ns-3 version | nothing: the weekly run picks up a new upstream tag (`tools/ns3_matrix.py`); `workflow_dispatch` with `versions` rebuilds one |
 | Change the tiers, a base image digest, or add a profile | `tools/ns3_matrix.py` (+ its test) and the `Dockerfile` profile `case` |
+| Handle an image request (another distro, compiler, version) | the *Image request* form's issue; supported set and its reasons in README "Need another distribution…" and #19. When the org's forms in `swarm-routing/.github` change, re-copy them into `.github/ISSUE_TEMPLATE/` |
 | Add a stock ns-3 module to the images | `NS3_MODULES` in `docker/Dockerfile` (every downstream repo inherits it) |
 | Change how contrib modules build | `docker/scripts/build-contrib.sh` (+ `test/smoke.sh`) |
 | The reference image this was derived from | AntHocNet `docker/Dockerfile.ns3`, `.github/workflows/images.yml` |

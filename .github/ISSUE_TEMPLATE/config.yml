@@ -1,0 +1,10 @@
+# Copyright (c) 2026 Daniel Joppi (https://github.com/swarm-routing)
+# SPDX-License-Identifier: MIT OR GPL-2.0-only
+blank_issues_enabled: true
+contact_links:
+  - name: Issue and label conventions
+    url: https://github.com/swarm-routing/.github/blob/main/CONTRIBUTING.md#issues
+    about: Body shape (Context, Scope, Acceptance criteria, Depends on, References) and the type / area / model / priority labels.
+  - name: AntHocNet (reference implementation, until its cutover)
+    url: https://github.com/danieljoppi/AntHocNet/issues
+    about: Di Caro et al. AntHocNet-specific mechanics are still tracked in danieljoppi/AntHocNet.

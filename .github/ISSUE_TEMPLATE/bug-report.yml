@@ -1,0 +1,43 @@
+# Copyright (c) 2026 Daniel Joppi (https://github.com/swarm-routing)
+# SPDX-License-Identifier: MIT OR GPL-2.0-only
+name: Bug report
+description: A defect, regression, or wrong result (protocol behaviour, adapter, harness).
+title: "[area] "
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: >
+        Apply the matching area label(s) to the issue as well (dropdown choices
+        are not auto-applied as labels).
+      options:
+        - protocol (a protocol's core/ algorithm)
+        - adapter (ns-3 translation layer)
+        - ns3 (ns-3 build, versions, contrib module)
+        - benchmark / harness (arenas, ns3-tool, datasets)
+        - observability (##RUN##/##BENCH##/##DIAG## lines, probes)
+        - packaging / CI (images, reusable workflows, releases)
+        - learn-site (the Colony Arena site and games)
+        - literature (papers, fidelity notes, equation Rosetta Stones)
+    validations:
+      required: true
+  - type: textarea
+    id: symptom
+    attributes:
+      label: Symptom + evidence
+      description: >
+        Benchmark numbers, `##RUN##`/`##DIAG##` lines, the seed, CI/job links — enough to act on
+        without the chat (CONTRIBUTING.md, Issues).
+    validations:
+      required: true
+  - type: textarea
+    id: rootcause
+    attributes:
+      label: Root cause (if known)
+      description: Code references as `file:line`.
+  - type: textarea
+    id: refs
+    attributes:
+      label: Related issues / PRs / ADRs / runs

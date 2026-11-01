@@ -1,0 +1,80 @@
+# Copyright (c) 2026 Daniel Joppi (https://github.com/swarm-routing)
+# SPDX-License-Identifier: MIT OR GPL-2.0-only
+name: Image request
+description: Ask for an ns3-dev image that is not published (another distribution, version, compiler, profile or ns-3 feature).
+title: "[image request] "
+labels: ["enhancement", "packaging"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The published set is deliberately small: the ten newest ns-3 releases on
+        Ubuntu, Debian (and debian-slim) and Alpine, with each distribution's gcc
+        (see the README, "Which image"). There are no Windows or macOS images; on
+        those hosts use Docker Desktop / WSL2. Tell us what your ns-3 work needs
+        and **why an existing image does not fit** — a request with a concrete
+        lab, cluster or CI constraint is what gets an image added.
+  - type: input
+    id: ns3
+    attributes:
+      label: ns-3 version(s)
+      placeholder: "e.g. 3.48, or 3.36 (outside the ten-release window)"
+    validations:
+      required: true
+  - type: input
+    id: distro
+    attributes:
+      label: Distribution and version
+      placeholder: "e.g. Rocky Linux 9, Ubuntu 22.04, Fedora 43"
+    validations:
+      required: true
+  - type: input
+    id: compiler
+    attributes:
+      label: Compiler and version
+      placeholder: "e.g. gcc 11, clang 18, the distribution default"
+    validations:
+      required: true
+  - type: dropdown
+    id: profile
+    attributes:
+      label: Build profile
+      options:
+        - default (-Os -g, asserts and logs on)
+        - debug (-O0, asserts and logs on)
+        - sanitized (ASan + LSan + UBSan)
+        - optimized (ns-3 release, for benchmarks)
+        - not sure
+    validations:
+      required: true
+  - type: dropdown
+    id: arch
+    attributes:
+      label: Architecture
+      options:
+        - linux/amd64
+        - linux/arm64 (Apple Silicon, Graviton, Ampere)
+        - both
+    validations:
+      required: true
+  - type: textarea
+    id: features
+    attributes:
+      label: ns-3 modules or features needed
+      description: Extra stock modules (e.g. lte, mmwave from contrib, netanim), MPI, Python bindings, sqlite, Eigen, emulation (FdNetDevice), anything the configure line must enable.
+    validations:
+      required: false
+  - type: textarea
+    id: why
+    attributes:
+      label: Why an existing image does not fit
+      description: The constraint — your HPC cluster's OS, a lab's CI runner, a paper artifact pinned to a toolchain, a compiler-specific bug you need to reproduce.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: ns-3 support evidence (optional)
+      description: ns-3 docs, release notes or CI config showing the platform or compiler is supported for that version (e.g. `doc/installation/source/linux.rst`, `utils/tests/gitlab-ci-*.yml`).
+    validations:
+      required: false

@@ -1,0 +1,72 @@
+# Copyright (c) 2026 Daniel Joppi (https://github.com/swarm-routing)
+# SPDX-License-Identifier: MIT OR GPL-2.0-only
+name: Enhancement
+description: A new mechanism, spec-fidelity item, adapter capability, or harness feature.
+title: "[area] "
+labels: ["enhancement"]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: >
+        Apply the matching area label(s) to the issue as well (dropdown choices
+        are not auto-applied as labels). Add `epic` for umbrella issues.
+      options:
+        - protocol (a protocol's core/ algorithm)
+        - adapter (ns-3 translation layer)
+        - ns3 (ns-3 build, versions, contrib module)
+        - benchmark / harness (arenas, ns3-tool, datasets)
+        - observability (##RUN##/##BENCH##/##DIAG## lines, probes)
+        - packaging / CI (images, reusable workflows, releases)
+        - learn-site (the Colony Arena site and games)
+        - literature (papers, fidelity notes, equation Rosetta Stones)
+        - documentation
+    validations:
+      required: true
+  - type: dropdown
+    id: model
+    attributes:
+      label: Recommended model
+      description: >
+        Which Claude model class should implement this (see the labelling
+        convention in CONTRIBUTING.md). Apply the matching `model:*` label too.
+      options:
+        - "model:haiku-4.5 — mechanical / chore"
+        - "model:sonnet-5 — well-specified plumbing, tooling, docs"
+        - "model:opus-4.8 — protocol semantics, root-cause work, CI-validated adapter changes"
+        - "model:fable-5 — architectural / greenfield"
+    validations:
+      required: false
+  - type: textarea
+    id: context
+    attributes:
+      label: Context / spec reference
+      description: >
+        Why this matters; paper/spec section if
+        applicable.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: Code references as `file:line`; which layer (`core/` vs `ns3/` adapter vs ns3-swarm-core).
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria / how to test
+      description: >
+        Core unit test expectations, CI validation, and (for behaviour changes)
+        the benchmark comparison that decides success.
+  - type: input
+    id: depends
+    attributes:
+      label: Depends on
+      description: Issue references, cross-repo form (e.g. `swarm-routing/ns3-swarm-core#3`). Leave blank if none.
+  - type: textarea
+    id: refs
+    attributes:
+      label: Related issues / PRs / ADRs / papers
