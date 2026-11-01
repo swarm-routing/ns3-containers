@@ -24,7 +24,10 @@ docker/scripts/build-contrib.sh   -> /usr/local/bin/ns3-build-contrib
 test/run.sh                       every test stage against one image ref (the candidate digest in CI)
 test/structure.sh                 image contract: tree, tools, env, configure record, CMake cache vs profile, C++ standard
 test/smoke.sh                     image smoke (incremental build + test.py + guards)
+test/integration.sh               ns-3 simulates: tutorial `first` + manet-canary AODV/OLSR/DSDV dense/sparse under a wall-clock budget
+test/known-failures.txt           upstream bugs expected on one exact ns-3 version (strict XFAIL, shown in the summary)
 test/fixtures/swarm-hello/        minimal contrib module (C++17..C++23) used by the smoke (GPL-2.0-only: an ns-3 module)
+test/fixtures/manet-canary/       short MANET program for the integration stage (GPL-2.0-only)
 .github/workflows/publish-images.yml   resolve -> build once (candidate in ns3-dev-ci) -> test by digest -> promote = retag the same digest (main) -> sign -> attest -> latest-*; weekly new release; `versions` = on demand
 .github/workflows/candidates-cleanup.yml   daily: delete ns3-dev-ci candidates older than 7 days
 .github/workflows/licence.yml     licence headers (tooling MIT OR GPL-2.0-only, rest GPL-2.0-only)
@@ -100,7 +103,7 @@ Org-wide (1–9), then this repo's own.
 14. **One buildx cache scope per version x base x profile** (`mode=max`, registry cache in `ns3-dev-cache`); delete a scope's tag when its version stops being the supported release.
 15. **The version list is generated, never typed.** `tools/ns3_matrix.py` reads upstream tags; a hand-pinned version would silently stop following ns-3's supported release.
 16. **Automatic pipelines build only the release ns-3 supports** (its latest; the generator's default). Older releases are history: never rebuild them as a side effect; the `versions` input is a deliberate, manual, on-demand build.
-17. **What is tested is what is tagged.** Each image is built once; every test runs on that build by digest, in the same run; tags are a carbon copy of that digest (`imagetools create`), never a rebuild. A new test stage goes into `test/run.sh`, so automatic and on-demand builds (and fork PRs) all run it (#36, #37).
+17. **What is tested is what is tagged.** Each image is built once; every test runs on that build by digest, in the same run; tags are a carbon copy of that digest (`imagetools create`), never a rebuild. A new test stage goes into `test/run.sh`, so automatic and on-demand builds (and fork PRs) all run it (#36, #37). A known upstream bug is a `test/known-failures.txt` entry for one exact ns-3 version with its tracking issue, never a skipped or loosened check.
 
 ## Conventions
 

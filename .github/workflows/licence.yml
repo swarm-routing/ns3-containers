@@ -16,5 +16,5 @@ jobs:
   headers:
     uses: swarm-routing/.github/.github/workflows/reusable-licence-check.yml@main
     with:
-      dual-roots: docker/ test/smoke.sh test/run.sh test/structure.sh tools/ .github/
+      dual-roots: docker/ test/smoke.sh test/run.sh test/structure.sh test/integration.sh tools/ .github/
       core-roots: ''
