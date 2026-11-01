@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Daniel Joppi (https://github.com/swarm-routing)
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: MIT OR GPL-2.0-only
 #
 # Pre-built ns-3 for swarm-routing contrib modules.
 #
@@ -66,7 +66,7 @@ ENV NS3_VERSION=${NS3_VERSION} \
 
 LABEL org.opencontainers.image.source="https://github.com/swarm-routing/ns3-containers" \
       org.opencontainers.image.description="ns-3 with a warm Ninja build for swarm-routing contrib modules" \
-      org.opencontainers.image.licenses="MIT AND GPL-2.0-only"
+      org.opencontainers.image.licenses="GPL-2.0-only"
 
 WORKDIR /opt/ns-3
 CMD ["bash"]

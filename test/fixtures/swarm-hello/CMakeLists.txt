@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Daniel Joppi (https://github.com/swarm-routing)
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: GPL-2.0-only
 #
 # Smoke fixture: the smallest contrib module that exercises what downstream
 # repos need from the image (a library linked against stock modules, a C++20

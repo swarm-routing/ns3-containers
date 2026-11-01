@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Copyright (c) 2026 Daniel Joppi (https://github.com/swarm-routing)
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: MIT OR GPL-2.0-only
 #
 # Image smoke test, run inside an ns3-dev image with this repo mounted at /src:
 #

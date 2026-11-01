@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Daniel Joppi (https://github.com/swarm-routing)
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: MIT OR GPL-2.0-only
 name: Publish images
 
 # Builds ghcr.io/swarm-routing/ns3-dev:<ns3-version>-<profile> for every

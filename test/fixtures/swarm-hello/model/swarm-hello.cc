@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Daniel Joppi (https://github.com/swarm-routing)
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-2.0-only
 #include "swarm-hello.h"
 
 namespace ns3 {

@@ -58,4 +58,7 @@ cache scope per version × profile.
 
 ## Licence
 
-The repository's own files are MIT. The images contain ns-3, which is GPL-2.0-only.
+Per directory, as AntHocNet ([LICENSING.md](LICENSING.md)): the image tooling
+(`docker/`, `test/smoke.sh`, the workflows) is `MIT OR GPL-2.0-only`; the ns-3
+fixture module and everything else is `GPL-2.0-only`. The published images
+contain ns-3 and are distributed under GPL-2.0.

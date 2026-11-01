@@ -17,8 +17,9 @@ contrib module compiles alone in seconds. Profiles: `debug` (CI default),
 docker/Dockerfile                 NS3_VERSION x BUILD_PROFILE image
 docker/scripts/build-contrib.sh   -> /usr/local/bin/ns3-build-contrib
 test/smoke.sh                     image smoke (incremental build + test.py + guards)
-test/fixtures/swarm-hello/        minimal C++20 contrib module used by the smoke
+test/fixtures/swarm-hello/        minimal C++20 contrib module used by the smoke (GPL-2.0-only: an ns-3 module)
 .github/workflows/publish-images.yml   build -> smoke -> push (main) per version x profile
+.github/workflows/licence.yml     licence headers (tooling MIT OR GPL-2.0-only, rest GPL-2.0-only)
 ```
 
 ## Build & verify
@@ -40,18 +41,26 @@ that layer. The PR's own `publish-images` run is the authoritative check.
 
 Org-wide (1–9), then this repo's own.
 
-1. **SPDX header on every original source file.** `.h`, `.cc`, `.cpp`, `.py`
-   (and scripts, workflows) start with
+1. **Licensing per directory, as AntHocNet** ([`LICENSING.md`](LICENSING.md);
+   AntHocNet [LICENSING.md](https://github.com/danieljoppi/AntHocNet/blob/main/LICENSING.md),
+   [ADR-0028](https://github.com/danieljoppi/AntHocNet/blob/main/docs/adr/0028-core-is-dual-licensed.md)). A
+   simulator-free `core/` and the standalone tooling are `MIT OR GPL-2.0-only`;
+   ns-3 modules, the site, docs and data are `GPL-2.0-only`. Every original
+   `.h`/`.hpp`/`.cc`/`.cpp`/`.py`/`.sh` starts with
    `// Copyright (c) 2026 Daniel Joppi (https://github.com/swarm-routing)` +
-   `// SPDX-License-Identifier: MIT` (`#` comments where needed). CI checks it.
-2. **No GPL code in an MIT repo.** Never copy from ns-3's `src/aodv`, `src/olsr`
-   or any other ns-3 module; implement against public ns-3 interfaces. From
-   AntHocNet, only the `MIT OR GPL-2.0-only` paths (`core/`, `tools/`,
-   `ns3/tools/`, `docs/tools/`) may be extracted as-is. Its `ns3/` modules
-   (the `adaptive` arms, `routing-bench`, `oracle`) are **GPL-2.0-only**:
-   bringing one here needs the copyright holder's explicit relicensing
-   decision recorded in an issue first. `ns3/baselines/aomdv` and `gpsr` are
-   third-party GPL and never come here.
+   `// SPDX-License-Identifier: <MIT OR GPL-2.0-only | GPL-2.0-only>` (`#`
+   comments where needed), matching its directory in `LICENSING.md`. CI
+   (`reusable-licence-check.yml`) checks it. A new directory gets its row in
+   `LICENSING.md` in the same PR.
+2. **The licence boundary only goes one way.** GPL code may use the dual
+   parts; dual code never pulls GPL-only code in: a `core/` file includes only
+   the C++ standard library and other `core/` files (CI checks it), and a dual
+   script imports no GPL-only code. Code coming from AntHocNet keeps its
+   licence: its `core/`/`tools/` (dual) may land in dual or GPL paths here; its
+   `ns3/` modules and `web/` (GPL-2.0-only) only in GPL paths. Third-party code
+   (AntHocNet's vendored `aomdv`/`gpsr`, IITP RAS) lands only in GPL paths with
+   its provenance recorded. Write clean implementations against public ns-3
+   interfaces rather than copying ns-3's `src/aodv`/`src/olsr`.
 3. **Wire formats are POD + versioned.** Control headers are
    simulator-independent POD structs with bounds-checked little-endian
    readers/writers, a leading version byte, and deterministic roundtrip + fuzz
