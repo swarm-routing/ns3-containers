@@ -4,7 +4,7 @@
 
 namespace ns3 {
 
-bool SwarmHelloReadLe16(std::span<const uint8_t> buf, uint16_t& out) {
+bool SwarmHelloReadLe16(SwarmHelloBytes buf, uint16_t& out) {
     if (buf.size() < 2) return false;
     out = static_cast<uint16_t>(buf[0] | (buf[1] << 8));
     return true;
