@@ -53,8 +53,9 @@ CI that should track ns-3 uses `latest-debug` / `latest-sanitized`; anything
 that produces a published number pins a versioned `-<sha7>` tag.
 
 Toolchains: Ubuntu 24.04 gcc-13 / CMake 3.28; Debian 13 gcc-14 / CMake 3.31;
-each tree builds in its own C++ standard (C++17 for 3.40, C++20 for
-3.41–3.48, C++23 for 3.49). *Slim* only means the smaller `debian:13-slim`
+each tree builds in its own C++ standard (ns-3's `CMAKE_CXX_STANDARD_MINIMUM`:
+C++17 for 3.40, C++20 for 3.41–3.45, C++23 from 3.46; the structure test reads
+it from the tree and checks the build used it). *Slim* only means the smaller `debian:13-slim`
 base: the image is mostly the built ns-3 tree, which cannot be trimmed without
 losing the warm incremental build. Alpine (musl) is outside ns-3's supported
 platforms and can never have a `sanitized` image (no ASan/LSan on musl).
@@ -110,10 +111,16 @@ test/run.sh ns3-dev:3.48-debug                             # every test stage, a
 ```
 
 `test/run.sh <image>` runs every test stage against one image, each in a
-fresh container; today that is `test/smoke.sh`, which builds the
-`test/fixtures/swarm-hello` module, runs its test.py suite, and fails if the
-build took more than 40 Ninja steps (i.e. the warm cache was missed). More
-stages are coming (#36): security, structure, ns-3's own unit suites, profile
+fresh container (pass `EXPECT_VERSION`, `EXPECT_PROFILE`, `EXPECT_OS` to
+compare against what the image should be; CI passes its matrix entry):
+
+| Stage | Checks |
+|---|---|
+| `labels` | the OCI labels: source, licence, ns-3 version, profile, base |
+| `structure` | `/opt/ns-3` configured and built, `ns3-build-contrib` on `PATH`, the environment, the recorded configure line, the CMake cache matching the profile (build type, asserts, logs, sanitizers, no native optimizations, examples and tests on), the C++ standard the tree requires |
+| `smoke` | builds `test/fixtures/swarm-hello`, runs its test.py suite, fails above 40 Ninja steps (the warm cache was missed) |
+
+More stages are coming (#36): security, ns-3's own unit suites, profile
 checks, MANET example runs, fixed-seed regression and a downstream canary.
 
 **What is tested is what is published.**

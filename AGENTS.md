@@ -22,6 +22,7 @@ docker/Dockerfile                 BASE_IMAGE x NS3_VERSION x BUILD_PROFILE image
 tools/ns3_matrix.py               supported release vs on-demand releases, base digests and tags (+ test_ns3_matrix.py)
 docker/scripts/build-contrib.sh   -> /usr/local/bin/ns3-build-contrib
 test/run.sh                       every test stage against one image ref (the candidate digest in CI)
+test/structure.sh                 image contract: tree, tools, env, configure record, CMake cache vs profile, C++ standard
 test/smoke.sh                     image smoke (incremental build + test.py + guards)
 test/fixtures/swarm-hello/        minimal contrib module (C++17..C++23) used by the smoke (GPL-2.0-only: an ns-3 module)
 .github/workflows/publish-images.yml   resolve -> build once (candidate in ns3-dev-ci) -> test by digest -> promote = retag the same digest (main) -> sign -> attest -> latest-*; weekly new release; `versions` = on demand
@@ -36,8 +37,9 @@ test/fixtures/swarm-hello/        minimal contrib module (C++17..C++23) used by 
 python3 -m unittest discover -s tools                               # matrix generator
 docker build -f docker/Dockerfile --build-arg NS3_VERSION=3.48 \
     --build-arg BUILD_PROFILE=debug -t ns3-dev:3.48-debug .        # ~8-15 min on 4 cores
-test/run.sh ns3-dev:3.48-debug                                     # every test stage, as CI runs them
-shellcheck docker/scripts/build-contrib.sh test/smoke.sh test/run.sh
+EXPECT_VERSION=3.48 EXPECT_PROFILE=debug EXPECT_OS=ubuntu \
+    test/run.sh ns3-dev:3.48-debug                                 # every test stage, as CI runs them
+shellcheck docker/scripts/build-contrib.sh test/*.sh
 actionlint .github/workflows/*.yml
 ```
 
