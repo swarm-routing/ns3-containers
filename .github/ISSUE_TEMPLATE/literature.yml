@@ -1,0 +1,40 @@
+# Copyright (c) 2026 Daniel Joppi (https://github.com/swarm-routing)
+# SPDX-License-Identifier: MIT OR GPL-2.0-only
+name: Literature / fidelity
+description: A paper to obtain or digest, a spec ambiguity, or a fidelity note (what an implementation reproduces from its paper).
+title: "[literature] "
+labels: ["documentation", "literature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        PDFs and manuscript drafts live in the private `swarm-routing/papers` repo; never attach a paywalled PDF to a public issue.
+        A comparator arm's numbers only count after its three gates: a fidelity sheet from its paper, the per-PR delivery smoke, and an anchor reproducing the paper's own trend.
+  - type: input
+    id: citation
+    attributes:
+      label: Citation
+      description: Authors, year, title, venue, DOI/URL.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Which protocol/repo needs it and for what (a parameter default, an equation, a mobility model, an anchor trend).
+    validations:
+      required: true
+  - type: textarea
+    id: claims
+    attributes:
+      label: Claims / equations to extract
+      description: Section, equation and table numbers. Quote the minimum needed.
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: e.g. digest committed to `papers`, fidelity table row added, parameter `source` column filled.
+  - type: textarea
+    id: refs
+    attributes:
+      label: Related issues / PRs

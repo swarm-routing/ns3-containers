@@ -53,6 +53,22 @@ Modules built: `core network internet wifi mesh mobility energy flow-monitor
 applications point-to-point csma aodv olsr dsdv dsr stats` (plus their
 dependencies).
 
+## Need another distribution, version or compiler?
+
+The published set is deliberately small: the ten newest ns-3 releases, on
+**Ubuntu, Debian (and debian-slim) and Alpine**, built with each
+distribution's own gcc. There are **no Windows or macOS images**: on those
+hosts run these Linux images through Docker Desktop, Colima or WSL2.
+
+If your work needs something else (another distribution or release, such as
+Rocky Linux or Ubuntu 22.04; a specific compiler, such as clang or an older
+gcc; an ns-3 version outside the window; extra ns-3 modules or features such
+as MPI or Python bindings), **[open an *Image request* issue](https://github.com/swarm-routing/ns3-containers/issues/new?template=image-request.yml)**
+with your ns-3 requirements: version, distribution, compiler, profile,
+architecture, the modules you need, and why an existing image does not fit.
+Requests that name a concrete lab, cluster or CI constraint are what get an
+image added.
+
 ## Building a contrib module
 
 ```bash
