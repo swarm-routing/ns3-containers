@@ -37,71 +37,83 @@ def run(tags, *args):
     return json.loads(out.getvalue().splitlines()[0])["include"]
 
 
-class Window(unittest.TestCase):
-    def test_top_ten_newest_patch(self):
-        win = m.window(m.parse_tags(LS_REMOTE))
-        self.assertEqual([f for _, f in win],
-                         ["3.49", "3.48", "3.47", "3.46.1", "3.45", "3.44", "3.43", "3.42", "3.41", "3.40"])
-        self.assertIn(("3.46", "3.46.1"), win)
+class Releases(unittest.TestCase):
+    def test_newest_patch_per_minor(self):
+        rel = m.releases(m.parse_tags(LS_REMOTE))
+        self.assertEqual(rel[0], ("3.49", "3.49"))
+        self.assertIn(("3.46", "3.46.1"), rel)
+        self.assertIn(("3.36", "3.36.1"), rel)
 
     def test_rc_and_dev_tags_ignored(self):
         self.assertNotIn(50, m.parse_tags(LS_REMOTE))
 
-    def test_new_release_shifts_window_and_tiers(self):
-        mx = run(LS_REMOTE + ["ttt\trefs/tags/ns-3.50"])
-        versions = sorted({e["minor"] for e in mx}, key=lambda v: int(v.split(".")[1]))
-        self.assertEqual(versions[0], "3.41")
-        self.assertEqual(versions[-1], "3.50")
-        full = {e["minor"] for e in mx if e["profile"] == "sanitized"}
-        self.assertEqual(full, {"3.48", "3.49", "3.50"})
 
+class Supported(unittest.TestCase):
+    """The automatic pipelines build only the release ns-3 supports: its latest."""
 
-class Matrix(unittest.TestCase):
     def setUp(self):
         self.mx = run(LS_REMOTE, "--sha", "290685fdeadbeef")
 
-    def test_size_and_tiers(self):
-        # 3 x (4 ubuntu + 2 debian + 2 slim) + 7 x 2 ubuntu + 1 alpine
-        self.assertEqual(len(self.mx), 24 + 14 + 1)
-        rest = [e for e in self.mx if e["minor"] == "3.43"]
-        self.assertEqual({(e["os"], e["profile"]) for e in rest},
-                         {("ubuntu", "default"), ("ubuntu", "debug")})
+    def test_only_the_latest_release(self):
+        self.assertEqual({e["version"] for e in self.mx}, {"3.49"})
+        # 4 ubuntu + 2 debian + 2 slim + 1 alpine
+        self.assertEqual(len(self.mx), 9)
         alpine = [e for e in self.mx if e["os"] == "alpine"]
-        self.assertEqual([(e["minor"], e["profile"], e["experimental"]) for e in alpine],
-                         [("3.49", "debug", True)])
+        self.assertEqual([(e["profile"], e["experimental"]) for e in alpine], [("debug", True)])
         self.assertFalse(any(e["experimental"] for e in self.mx if e["os"] != "alpine"))
 
-    def test_no_sanitized_on_alpine_or_optimized_outside_ubuntu(self):
+    def test_new_release_replaces_it(self):
+        mx = run(LS_REMOTE + ["ttt\trefs/tags/ns-3.50"])
+        self.assertEqual({e["version"] for e in mx}, {"3.50"})
+
+    def test_no_sanitized_or_optimized_outside_ubuntu(self):
         for e in self.mx:
             if e["profile"] in ("sanitized", "optimized"):
                 self.assertEqual(e["os"], "ubuntu")
 
     def test_tags(self):
-        def tags(minor, os_, profile):
-            (e,) = [e for e in self.mx if (e["minor"], e["os"], e["profile"]) == (minor, os_, profile)]
+        def tags(os_, profile):
+            (e,) = [e for e in self.mx if (e["os"], e["profile"]) == (os_, profile)]
             return e["tags"].split()
-        self.assertEqual(tags("3.49", "ubuntu", "default"),
-                         ["3.49-default", "3.49", "latest", "3.49-default-290685f", "3.49-290685f"])
-        self.assertEqual(tags("3.48", "ubuntu", "sanitized"), ["3.48-sanitized", "3.48-sanitized-290685f"])
-        self.assertEqual(tags("3.47", "slim", "default"),
-                         ["3.47-slim-default", "3.47-slim", "3.47-slim-default-290685f", "3.47-slim-290685f"])
-        self.assertEqual(tags("3.46", "ubuntu", "debug"),
-                         ["3.46-debug", "3.46.1-debug", "3.46-debug-290685f", "3.46.1-debug-290685f"])
-        self.assertNotIn("latest", tags("3.48", "ubuntu", "default"))
+        self.assertEqual(tags("ubuntu", "default"),
+                         ["3.49-default", "3.49", "latest-default", "latest",
+                          "3.49-default-290685f", "3.49-290685f"])
+        self.assertEqual(tags("ubuntu", "sanitized"),
+                         ["3.49-sanitized", "latest-sanitized", "3.49-sanitized-290685f"])
+        self.assertEqual(tags("slim", "default"),
+                         ["3.49-slim-default", "3.49-slim", "latest-slim-default", "latest-slim",
+                          "3.49-slim-default-290685f", "3.49-slim-290685f"])
 
     def test_entries_carry_build_inputs(self):
-        (e,) = [e for e in self.mx if e["name"] == "3.46-default"]
-        self.assertEqual(e["version"], "3.46.1")
-        self.assertEqual(e["cache"], "3.46-ubuntu-default")
-        self.assertTrue(e["base_image"].startswith("ubuntu:24.04@sha256:"))
         for e in self.mx:
             self.assertIn("@sha256:", e["base_image"])
+        (e,) = [e for e in self.mx if e["name"] == "3.49-default"]
+        self.assertEqual(e["cache"], "3.49-ubuntu-default")
 
-    def test_versions_filter(self):
-        mx = run(LS_REMOTE, "--versions", "3.46.1")
-        self.assertEqual({e["version"] for e in mx}, {"3.46.1"})
+
+class OnDemand(unittest.TestCase):
+    """--versions builds any upstream release by hand (ubuntu x default, debug)."""
+
+    def test_old_release_outside_any_window(self):
+        mx = run(LS_REMOTE, "--versions", "3.36", "--sha", "abcdef0")
+        self.assertEqual({e["version"] for e in mx}, {"3.36.1"})
+        self.assertEqual({(e["os"], e["profile"]) for e in mx},
+                         {("ubuntu", "default"), ("ubuntu", "debug")})
+        (d,) = [e for e in mx if e["profile"] == "debug"]
+        self.assertEqual(d["tags"].split(),
+                         ["3.36-debug", "3.36.1-debug", "3.36-debug-abcdef0", "3.36.1-debug-abcdef0"])
+        self.assertFalse(any("latest" in e["tags"] for e in mx))
+
+    def test_full_version_and_minor_both_accepted(self):
+        mx = run(LS_REMOTE, "--versions", "3.46.1,3.42")
+        self.assertEqual({e["version"] for e in mx}, {"3.46.1", "3.42"})
+
+    def test_supported_release_on_demand_gets_its_full_set(self):
+        self.assertEqual(len(run(LS_REMOTE, "--versions", "3.49")), 9)
+
+    def test_unknown_version_refused(self):
         with self.assertRaises(SystemExit):
-            run(LS_REMOTE, "--versions", "3.36")
+            run(LS_REMOTE, "--versions", "3.99")
 
 
 if __name__ == "__main__":

@@ -3,30 +3,37 @@
 # SPDX-License-Identifier: MIT OR GPL-2.0-only
 """Generate the ns3-dev image matrix from upstream ns-3 release tags.
 
-    tools/ns3_matrix.py [--tags-file F] [--versions 3.48,3.49] [--sha SHA]
+    tools/ns3_matrix.py [--tags-file F] [--versions 3.36,3.46.1] [--sha SHA]
                         [--missing-only] [--image REF]
 
-Prints a GitHub Actions matrix, {"include": [...]}, on stdout. The version
-window is never typed by hand: it is the WINDOW newest ns-3 minor releases
-(newest patch of each), read from `git ls-remote` of ns-3-dev (or --tags-file,
-one tag per line, for tests). Tiers:
+Prints a GitHub Actions matrix, {"include": [...]}, on stdout. Versions are
+never typed by hand: they are read from `git ls-remote` of ns-3-dev (or
+--tags-file, one tag per line, for tests), newest patch of each minor.
 
-    latest LATEST versions  ubuntu   x default, debug, sanitized, optimized
-                            debian   x default, debug
-                            slim     x default, debug
-    the rest of the window  ubuntu   x default, debug
-    newest version only     alpine   x debug (experimental: may fail)
+The automatic pipelines (push, PR, schedule) build only **the release ns-3
+supports**: ns-3 maintains its latest release only, with no maintenance
+branches or backports. That release gets:
+
+    ubuntu   x default, debug, sanitized, optimized
+    debian   x default, debug
+    slim     x default, debug
+    alpine   x debug (experimental: may fail)
+
+Any other ns-3 release is built **on demand** with --versions (a manual
+workflow_dispatch), as ubuntu x default, debug. Its images are then history:
+no automatic pipeline rebuilds them.
 
 Tags of one entry (ver = minor, e.g. 3.46; a patch release, e.g. 3.46.1, is
 also tagged under its full number):
 
     ubuntu   :<ver>-<profile>, and :<ver> for `default`
     others   :<ver>-<os>-<profile>, and :<ver>-<os> for `default`
-    newest ubuntu default also :latest
-    every tag but :latest also gets an immutable -<sha7> twin
+    the supported release also: :latest-<profile> / :latest-<os>-<profile>,
+             and :latest (ubuntu default) / :latest-<os>
+    every tag but the latest-* ones also gets an immutable -<sha7> twin
 
 --missing-only keeps only versions whose plain :<full-version> tag is not yet
-published (anonymous GHCR check): the weekly run builds new releases only.
+published (anonymous GHCR check): the scheduled run builds a new release once.
 """
 
 from __future__ import annotations
@@ -41,8 +48,6 @@ import urllib.request
 
 UPSTREAM = "https://gitlab.com/nsnam/ns-3-dev.git"
 IMAGE = "ghcr.io/swarm-routing/ns3-dev"
-WINDOW = 10
-LATEST = 3
 
 # Base images, pinned by digest (ns3-containers invariant 13). Bump a digest
 # here; the Dockerfile only receives it as BASE_IMAGE.
@@ -75,10 +80,9 @@ def parse_tags(lines):
     return {minor: full for minor, (_, full) in best.items()}
 
 
-def window(versions):
-    """The WINDOW newest minors, newest first, as (minor_str, full) pairs."""
-    minors = sorted(versions, reverse=True)[:WINDOW]
-    return [(f"3.{m}", versions[m]) for m in minors]
+def releases(versions):
+    """All upstream releases, newest first, as (minor_str, full) pairs."""
+    return [(f"3.{m}", versions[m]) for m in sorted(versions, reverse=True)]
 
 
 def tags_for(minor, full, os_, profile, newest, sha7):
@@ -90,19 +94,27 @@ def tags_for(minor, full, os_, profile, newest, sha7):
         if profile == "default":
             tags.append(stem)
     pinned = [f"{t}-{sha7}" for t in tags] if sha7 else []
-    latest = ["latest"] if newest and os_ == "ubuntu" and profile == "default" else []
+    latest = []
+    if newest:
+        stem = "latest" if os_ == "ubuntu" else f"latest-{os_}"
+        latest = [f"{stem}-{profile}"] + ([stem] if profile == "default" else [])
     return tags + latest + pinned
 
 
-def entries(win, sha7=""):
+def plan_for(supported):
+    """(os, profile) pairs: the full set for the supported release, else on-demand."""
+    if not supported:
+        return [("ubuntu", p) for p in LIGHT]
+    return ([("ubuntu", p) for p in FULL]
+            + [(os_, p) for os_ in ("debian", "slim") for p in LIGHT]
+            + [("alpine", "debug")])
+
+
+def entries(chosen, newest_full, sha7=""):
     out = []
-    for i, (minor, full) in enumerate(win):
-        plan = [("ubuntu", p) for p in (FULL if i < LATEST else LIGHT)]
-        if i < LATEST:
-            plan += [(os_, p) for os_ in ("debian", "slim") for p in LIGHT]
-        if i == 0:
-            plan += [("alpine", "debug")]
-        for os_, profile in plan:
+    for minor, full in chosen:
+        newest = full == newest_full
+        for os_, profile in plan_for(newest):
             out.append({
                 "version": full,
                 "minor": minor,
@@ -112,7 +124,7 @@ def entries(win, sha7=""):
                 "experimental": os_ == "alpine",
                 "name": f"{minor}-{os_}-{profile}" if os_ != "ubuntu" else f"{minor}-{profile}",
                 "cache": f"{minor}-{os_}-{profile}",
-                "tags": " ".join(tags_for(minor, full, os_, profile, i == 0, sha7)),
+                "tags": " ".join(tags_for(minor, full, os_, profile, newest, sha7)),
             })
     return out
 
@@ -141,7 +153,9 @@ def published(image, tag):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--tags-file", help="upstream tag names, one per line (default: git ls-remote)")
-    ap.add_argument("--versions", help="comma-separated full versions to keep (e.g. 3.48,3.46.1)")
+    ap.add_argument("--versions",
+                    help="on demand: comma-separated ns-3 releases, minor or full (e.g. 3.36,3.46.1); "
+                         "default: the supported (latest) release only")
     ap.add_argument("--sha", default="", help="commit SHA for the immutable -<sha7> tags")
     ap.add_argument("--missing-only", action="store_true", help="drop versions already published")
     ap.add_argument("--image", default=IMAGE)
@@ -153,16 +167,19 @@ def main(argv=None):
     else:
         lines = subprocess.run(["git", "ls-remote", "--tags", UPSTREAM, "ns-3.*"],
                                check=True, capture_output=True, text=True).stdout.splitlines()
-    win = window(parse_tags(lines))
-    if len(win) < WINDOW:
-        sys.exit(f"ns3_matrix: only {len(win)} ns-3 releases found upstream")
-    matrix = entries(win, args.sha[:7])
+    rel = releases(parse_tags(lines))
+    if not rel:
+        sys.exit("ns3_matrix: no ns-3 releases found upstream")
+    newest_full = rel[0][1]
     if args.versions:
-        keep = {v.strip() for v in args.versions.split(",") if v.strip()}
-        unknown = keep - {e["version"] for e in matrix}
+        want = {v.strip() for v in args.versions.split(",") if v.strip()}
+        chosen = [(m, f) for m, f in rel if m in want or f in want]
+        unknown = want - {m for m, _ in chosen} - {f for _, f in chosen}
         if unknown:
-            sys.exit(f"ns3_matrix: not in the window: {', '.join(sorted(unknown))}")
-        matrix = [e for e in matrix if e["version"] in keep]
+            sys.exit(f"ns3_matrix: not an upstream ns-3 release: {', '.join(sorted(unknown))}")
+    else:
+        chosen = rel[:1]
+    matrix = entries(chosen, newest_full, args.sha[:7])
     if args.missing_only:
         have = {v for v in {e["version"] for e in matrix} if published(args.image, v)}
         matrix = [e for e in matrix if e["version"] not in have]

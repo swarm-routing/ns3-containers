@@ -9,9 +9,9 @@ before changing anything. Org-wide conventions:
 
 Builds and publishes `ghcr.io/swarm-routing/ns3-dev` (public): ns-3
 pre-configured and pre-built with Ninja at `/opt/ns-3`, so a downstream contrib
-module compiles alone in seconds. The ten newest ns-3 releases, generated from
-upstream tags by `tools/ns3_matrix.py` (tiers, bases and tags: README "Which
-image"). Profiles: `default` (ns-3 `-d default`, the plain `:<ver>` tag),
+module compiles alone in seconds. Automatic pipelines build only the release
+ns-3 supports (its latest); older releases are built on demand and kept as
+history (`tools/ns3_matrix.py`; bases and tags: README "Which image"). Profiles: `default` (ns-3 `-d default`, the plain `:<ver>` tag),
 `debug` (CI default), `sanitized` (ASan+LSan+UBSan), `optimized` (ns-3
 `-d release`, campaigns only). Bases: Ubuntu 24.04 (default), Debian 13,
 Debian 13 slim, Alpine (experimental). `ns3-build-contrib` links mounted
@@ -19,11 +19,11 @@ modules into the tree and builds them.
 
 ```
 docker/Dockerfile                 BASE_IMAGE x NS3_VERSION x BUILD_PROFILE image
-tools/ns3_matrix.py               the version window, tiers, base digests and tags (+ test_ns3_matrix.py)
+tools/ns3_matrix.py               supported release vs on-demand releases, base digests and tags (+ test_ns3_matrix.py)
 docker/scripts/build-contrib.sh   -> /usr/local/bin/ns3-build-contrib
 test/smoke.sh                     image smoke (incremental build + test.py + guards)
 test/fixtures/swarm-hello/        minimal contrib module (C++17..C++23) used by the smoke (GPL-2.0-only: an ns-3 module)
-.github/workflows/publish-images.yml   resolve matrix -> build -> smoke -> push (main) -> sign -> attest; weekly new releases
+.github/workflows/publish-images.yml   resolve matrix -> build -> smoke -> push (main) -> sign -> attest; weekly new release; `versions` = on demand
 .github/workflows/licence.yml     licence headers (tooling MIT OR GPL-2.0-only, rest GPL-2.0-only)
 .github/ISSUE_TEMPLATE/           the org's forms (copied: a repo folder replaces the org defaults) + image-request.yml
 ```
@@ -93,8 +93,9 @@ Org-wide (1–9), then this repo's own.
 11. **`optimized` is ns-3's `release` profile, never ns-3's `optimized`** (`-march=native` makes an image SIGILL on another CPU).
 12. **CI consumes `debug`/`sanitized`, never `optimized`.** Asserts catch real bugs (AntHocNet #123).
 13. **Pinned inputs.** The base image by digest; actions by SHA. A published number pins the immutable `:<ver>-<profile>-<sha7>` tag, not the rolling one.
-14. **One buildx cache scope per version x base x profile** (`mode=max`, registry cache in `ns3-dev-cache`); delete a scope's tag when its version leaves the window.
-15. **The version list is generated, never typed.** `tools/ns3_matrix.py` reads upstream tags; a hand-pinned version would silently stop the window from moving.
+14. **One buildx cache scope per version x base x profile** (`mode=max`, registry cache in `ns3-dev-cache`); delete a scope's tag when its version stops being the supported release.
+15. **The version list is generated, never typed.** `tools/ns3_matrix.py` reads upstream tags; a hand-pinned version would silently stop following ns-3's supported release.
+16. **Automatic pipelines build only the release ns-3 supports** (its latest; the generator's default). Older releases are history: never rebuild them as a side effect; the `versions` input is a deliberate, manual, on-demand build.
 
 ## Conventions
 
@@ -130,8 +131,8 @@ Org-wide (1–9), then this repo's own.
 
 | You want to… | Go to |
 |--------------|-------|
-| Add an ns-3 version | nothing: the weekly run picks up a new upstream tag (`tools/ns3_matrix.py`); `workflow_dispatch` with `versions` rebuilds one |
-| Change the tiers, a base image digest, or add a profile | `tools/ns3_matrix.py` (+ its test) and the `Dockerfile` profile `case` |
+| Add an ns-3 version | nothing: the weekly run picks up a new upstream release (`tools/ns3_matrix.py`); an older one is built on demand with `workflow_dispatch` `versions` |
+| Change what a release gets, a base image digest, or add a profile | `tools/ns3_matrix.py` (+ its test) and the `Dockerfile` profile `case` |
 | Handle an image request (another distro, compiler, version) | the *Image request* form's issue; supported set and its reasons in README "Need another distribution…" and #19. When the org's forms in `swarm-routing/.github` change, re-copy them into `.github/ISSUE_TEMPLATE/` |
 | Add a stock ns-3 module to the images | `NS3_MODULES` in `docker/Dockerfile` (every downstream repo inherits it) |
 | Change how contrib modules build | `docker/scripts/build-contrib.sh` (+ `test/smoke.sh`) |
