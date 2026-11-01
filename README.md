@@ -43,8 +43,8 @@ Pin the `-<sha7>` tag in anything that produces a published number. The
 available, frozen (3.43 is no longer in the latest-3 tier).
 
 Toolchains: Ubuntu 24.04 gcc-13 / CMake 3.28; Debian 13 gcc-14 / CMake 3.31;
-each tree builds in its own C++ standard (C++17 for 3.40–3.41, C++20 for
-3.42–3.48, C++23 for 3.49). *Slim* only means the smaller `debian:13-slim`
+each tree builds in its own C++ standard (C++17 for 3.40, C++20 for
+3.41–3.48, C++23 for 3.49). *Slim* only means the smaller `debian:13-slim`
 base: the image is mostly the built ns-3 tree, which cannot be trimmed without
 losing the warm incremental build. Alpine (musl) is outside ns-3's supported
 platforms and can never have a `sanitized` image (no ASan/LSan on musl).

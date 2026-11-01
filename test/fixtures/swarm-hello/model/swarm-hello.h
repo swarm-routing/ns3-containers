@@ -13,10 +13,10 @@
 namespace ns3 {
 
 #if __cplusplus >= 202002L
-/// A bounds-checked byte view: std::span on C++20 trees (ns-3.42 and later).
+/// A bounds-checked byte view: std::span on C++20 trees (ns-3.41 and later).
 using SwarmHelloBytes = std::span<const uint8_t>;
 #else
-/// The same view on C++17 trees (ns-3.40, 3.41), which have no std::span.
+/// The same view on C++17 trees (ns-3.40), which have no std::span.
 class SwarmHelloBytes {
 public:
     template <typename C>
