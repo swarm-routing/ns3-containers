@@ -74,15 +74,15 @@ class Supported(unittest.TestCase):
     def test_tags(self):
         def tags(os_, profile):
             (e,) = [e for e in self.mx if (e["os"], e["profile"]) == (os_, profile)]
-            return e["tags"].split()
+            return e["tags"].split(), e["latest_tags"].split()
         self.assertEqual(tags("ubuntu", "default"),
-                         ["3.49-default", "3.49", "latest-default", "latest",
-                          "3.49-default-290685f", "3.49-290685f"])
+                         (["3.49-default", "3.49", "3.49-default-290685f", "3.49-290685f"],
+                          ["latest-default", "latest"]))
         self.assertEqual(tags("ubuntu", "sanitized"),
-                         ["3.49-sanitized", "latest-sanitized", "3.49-sanitized-290685f"])
+                         (["3.49-sanitized", "3.49-sanitized-290685f"], ["latest-sanitized"]))
         self.assertEqual(tags("slim", "default"),
-                         ["3.49-slim-default", "3.49-slim", "latest-slim-default", "latest-slim",
-                          "3.49-slim-default-290685f", "3.49-slim-290685f"])
+                         (["3.49-slim-default", "3.49-slim", "3.49-slim-default-290685f", "3.49-slim-290685f"],
+                          ["latest-slim-default", "latest-slim"]))
 
     def test_entries_carry_build_inputs(self):
         for e in self.mx:
@@ -102,7 +102,7 @@ class OnDemand(unittest.TestCase):
         (d,) = [e for e in mx if e["profile"] == "debug"]
         self.assertEqual(d["tags"].split(),
                          ["3.36-debug", "3.36.1-debug", "3.36-debug-abcdef0", "3.36.1-debug-abcdef0"])
-        self.assertFalse(any("latest" in e["tags"] for e in mx))
+        self.assertFalse(any("latest" in e["tags"] or e["latest_tags"] for e in mx))
 
     def test_full_version_and_minor_both_accepted(self):
         mx = run(LS_REMOTE, "--versions", "3.46.1,3.42")

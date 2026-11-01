@@ -106,14 +106,25 @@ instead of calling this by hand.
 python3 tools/ns3_matrix.py | python3 -m json.tool | less   # what CI will build
 docker build -f docker/Dockerfile --build-arg NS3_VERSION=3.48 \
     --build-arg BUILD_PROFILE=debug -t ns3-dev:3.48-debug .  # BASE_IMAGE/BASE_OS for other bases
-docker run --rm -v "$PWD:/src:ro" ns3-dev:3.48-debug bash /src/test/smoke.sh
+test/run.sh ns3-dev:3.48-debug                             # every test stage, as CI runs them
 ```
 
-`test/smoke.sh` builds the `test/fixtures/swarm-hello` module, runs its
-test.py suite, and fails if the build took more than 40 Ninja steps (i.e. the
-warm cache was missed). [`publish-images.yml`](.github/workflows/publish-images.yml)
-runs the same smoke on every PR and pushes to GHCR from `main`, signed
-(keyless cosign) with a provenance attestation; the buildx cache lives in
+`test/run.sh <image>` runs every test stage against one image, each in a
+fresh container; today that is `test/smoke.sh`, which builds the
+`test/fixtures/swarm-hello` module, runs its test.py suite, and fails if the
+build took more than 40 Ninja steps (i.e. the warm cache was missed). More
+stages are coming (#36): security, structure, ns-3's own unit suites, profile
+checks, MANET example runs, fixed-seed regression and a downstream canary.
+
+**What is tested is what is published.**
+[`publish-images.yml`](.github/workflows/publish-images.yml) builds each image
+**once** and pushes it to the candidate package `ghcr.io/swarm-routing/ns3-dev-ci`
+(not for consumers; deleted after 7 days). The tests run on that candidate
+**by digest**. Only an image whose tests passed gets its `ns3-dev` tags, as a
+byte-identical copy of the tested digest (no rebuild), then a keyless cosign
+signature and a provenance attestation. The `latest-*` tags move last, and
+only when every required image of the run passed. On-demand builds of older
+releases go through the same tests. The buildx cache lives in
 `ghcr.io/swarm-routing/ns3-dev-cache`, one tag per version × base × profile.
 
 ## Licence
