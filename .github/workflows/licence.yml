@@ -1,0 +1,20 @@
+# Copyright (c) 2026 Daniel Joppi (https://github.com/swarm-routing)
+# SPDX-License-Identifier: MIT OR GPL-2.0-only
+name: Licence
+
+# AntHocNet's per-directory licence rules (LICENSING.md): the image tooling is
+# MIT OR GPL-2.0-only; the ns-3 fixture module and everything else GPL-2.0-only.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  headers:
+    uses: swarm-routing/.github/.github/workflows/reusable-licence-check.yml@main
+    with:
+      dual-roots: docker/ test/smoke.sh .github/
+      core-roots: ''
