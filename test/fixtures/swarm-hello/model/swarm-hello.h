@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Daniel Henrique Joppi
+// Copyright (c) 2026 Daniel Joppi (https://github.com/swarm-routing)
 // SPDX-License-Identifier: GPL-2.0-only
 #ifndef SWARM_HELLO_H
 #define SWARM_HELLO_H
