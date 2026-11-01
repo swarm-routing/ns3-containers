@@ -7,17 +7,28 @@ compiles alone instead of rebuilding ns-3.
 
 ## Which image
 
-The window is the **ten newest ns-3 releases** (3.40–3.49 as of 2026-11-01),
-generated from upstream's tags by [`tools/ns3_matrix.py`](tools/ns3_matrix.py);
-a weekly run builds a new release as soon as it is tagged, and a version that
-leaves the window stops rebuilding (its tags stay).
+**Only the release ns-3 supports is maintained.** ns-3 maintains its latest
+release only (no maintenance branches, no backports; fixes arrive as a new
+release or, rarely, a point release such as 3.46.1). So the automatic
+pipelines build **the latest ns-3 release** only, read from upstream's tags by
+[`tools/ns3_matrix.py`](tools/ns3_matrix.py): a new release is picked up
+within a week, and every image change or OS security refresh (#27) rebuilds
+it alone. Follow it with the `latest-*` tags.
 
-| Versions | Base | Profiles |
+| Release | Base | Profiles |
 |---|---|---|
-| latest 3 (3.47, 3.48, 3.49) | Ubuntu 24.04 | `default`, `debug`, `sanitized`, `optimized` |
-| latest 3 | Debian 13, Debian 13 slim | `default`, `debug` |
-| the other 7 (3.40–3.46.1) | Ubuntu 24.04 | `default`, `debug` |
-| newest only (3.49) | Alpine 3.24 — **experimental**, may be missing | `debug` |
+| the supported release (3.49 today) | Ubuntu 24.04 | `default`, `debug`, `sanitized`, `optimized` |
+| the supported release | Debian 13, Debian 13 slim | `default`, `debug` |
+| the supported release | Alpine 3.24 — **experimental**, may be missing | `debug` |
+| any older release, **on demand** | Ubuntu 24.04 | `default`, `debug` |
+
+**Older releases are history.** 3.40–3.48 were published once, on 2026-11-01,
+and their tags keep working, but no automatic pipeline rebuilds them (no new
+base image, no OS security fix). A maintainer builds any ns-3 release on demand
+with the *Publish images* workflow's `versions` input (e.g. `3.36,3.42`); to
+ask for one, [open an image request](#need-another-distribution-version-or-compiler).
+Releases older than 3.40 have not been smoke-tested on these bases: an
+on-demand build reports whether the smoke test passes.
 
 | Profile | ns-3 configure | What it is for |
 |---|---|---|
@@ -32,15 +43,14 @@ with SIGILL on another CPU.
 
 | Tag | Image |
 |---|---|
-| `:3.49`, `:latest` | Ubuntu, `default` profile |
-| `:3.49-debug` (`-default`, `-sanitized`, `-optimized`) | Ubuntu, that profile |
+| `:latest`, `:latest-debug`, `:latest-sanitized`, `:latest-slim`, … | the supported release; moves to the next ns-3 release when it ships |
+| `:3.49`, `:3.49-debug` (`-default`, `-sanitized`, `-optimized`) | Ubuntu, that release and profile |
 | `:3.49-debian-debug`, `:3.49-slim` (`= -slim-default`) | other bases |
 | `:3.46-debug` and `:3.46.1-debug` | a patch release is tagged under both numbers |
-| any of the above + `-<sha7>` | immutable: the ns3-containers commit that built it |
+| any versioned tag + `-<sha7>` | immutable: the ns3-containers commit that built it |
 
-Pin the `-<sha7>` tag in anything that produces a published number. The
-`3.43-sanitized` and `3.43-optimized` images from the first publish stay
-available, frozen (3.43 is no longer in the latest-3 tier).
+CI that should track ns-3 uses `latest-debug` / `latest-sanitized`; anything
+that produces a published number pins a versioned `-<sha7>` tag.
 
 Toolchains: Ubuntu 24.04 gcc-13 / CMake 3.28; Debian 13 gcc-14 / CMake 3.31;
 each tree builds in its own C++ standard (C++17 for 3.40, C++20 for
@@ -55,14 +65,14 @@ dependencies).
 
 ## Need another distribution, version or compiler?
 
-The published set is deliberately small: the ten newest ns-3 releases, on
-**Ubuntu, Debian (and debian-slim) and Alpine**, built with each
-distribution's own gcc. There are **no Windows or macOS images**: on those
+The published set is deliberately small: the release ns-3 supports (older
+releases on demand), on **Ubuntu, Debian (and debian-slim) and Alpine**, built
+with each distribution's own gcc. There are **no Windows or macOS images**: on those
 hosts run these Linux images through Docker Desktop, Colima or WSL2.
 
 If your work needs something else (another distribution or release, such as
 Rocky Linux or Ubuntu 22.04; a specific compiler, such as clang or an older
-gcc; an ns-3 version outside the window; extra ns-3 modules or features such
+gcc; an older ns-3 release that should be built or maintained; extra ns-3 modules or features such
 as MPI or Python bindings), **[open an *Image request* issue](https://github.com/swarm-routing/ns3-containers/issues/new?template=image-request.yml)**
 with your ns-3 requirements: version, distribution, compiler, profile,
 architecture, the modules you need, and why an existing image does not fit.
