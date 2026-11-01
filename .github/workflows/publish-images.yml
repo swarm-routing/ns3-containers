@@ -318,6 +318,13 @@ jobs:
               continue
             fi
             digest=$(cat "$f")
+            # An experimental image can pass its tests and still fail to be
+            # promoted (its promote leg may fail without failing the run);
+            # its digest is then not in ns3-dev and its latest tags stay put.
+            if ! docker buildx imagetools inspect "${IMAGE}@${digest}" >/dev/null 2>&1; then
+              echo "$name: passed but not promoted, latest tags left as they are" >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
             args=()
             for t in $tags; do args+=(-t "${IMAGE}:${t}"); done
             docker buildx imagetools create "${args[@]}" "${IMAGE}@${digest}"

@@ -29,13 +29,22 @@ jobs:
         run: |
           base="/orgs/${ORG}/packages/container/ns3-dev-ci/versions"
           cutoff=$(date -u -d '7 days ago' +%Y-%m-%dT%H:%M:%SZ)
-          if ! ids=$(gh api --paginate "${base}?per_page=100" \
-                       --jq ".[] | select(.created_at < \"${cutoff}\") | .id"); then
-            echo "no ns3-dev-ci package (nothing pushed yet)"; exit 0
+          err="${RUNNER_TEMP}/gh-err"
+          if ! all=$(gh api --paginate "${base}?per_page=100" \
+                       --jq '.[] | "\(.created_at) \(.id)"' 2>"$err"); then
+            if grep -q 'HTTP 404' "$err"; then
+              echo "no ns3-dev-ci package (nothing pushed yet)"; exit 0
+            fi
+            cat "$err" >&2; exit 1
           fi
-          n=0
+          # GHCR refuses to delete a package's last version, so the newest one
+          # always stays; every other old version is deleted, and any refusal
+          # is then a real failure.
+          newest=$(printf '%s\n' "$all" | sort -r | head -1 | cut -d' ' -f2)
+          ids=$(printf '%s\n' "$all" | awk -v c="$cutoff" -v keep="$newest" '$1 < c && $2 != keep {print $2}')
+          n=0; failed=0
           for id in $ids; do
-            # GHCR refuses to delete a package's last version; that one stays.
-            if gh api -X DELETE "${base}/${id}" >/dev/null; then n=$((n + 1)); fi
+            if gh api -X DELETE "${base}/${id}" >/dev/null; then n=$((n + 1)); else failed=$((failed + 1)); fi
           done
-          echo "deleted ${n} candidate versions created before ${cutoff}" >> "$GITHUB_STEP_SUMMARY"
+          echo "deleted ${n} candidate versions created before ${cutoff}; ${failed} failed" >> "$GITHUB_STEP_SUMMARY"
+          [ "$failed" -eq 0 ]
