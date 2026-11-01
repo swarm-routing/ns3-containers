@@ -28,9 +28,13 @@ also tagged under its full number):
 
     ubuntu   :<ver>-<profile>, and :<ver> for `default`
     others   :<ver>-<os>-<profile>, and :<ver>-<os> for `default`
+    every one of those also gets an immutable -<sha7> twin
     the supported release also: :latest-<profile> / :latest-<os>-<profile>,
              and :latest (ubuntu default) / :latest-<os>
-    every tag but the latest-* ones also gets an immutable -<sha7> twin
+
+An entry's `tags` are set when its image passes its tests; its `latest_tags`
+(empty except for the supported release) move last, once every required image
+of the run has passed (publish-images.yml).
 
 --missing-only keeps only versions whose plain :<full-version> tag is not yet
 published (anonymous GHCR check): the scheduled run builds a new release once.
@@ -86,6 +90,7 @@ def releases(versions):
 
 
 def tags_for(minor, full, os_, profile, newest, sha7):
+    """(versioned + pinned tags, latest tags) of one image."""
     labels = [minor] + ([full] if full != minor else [])
     tags = []
     for label in labels:
@@ -98,7 +103,7 @@ def tags_for(minor, full, os_, profile, newest, sha7):
     if newest:
         stem = "latest" if os_ == "ubuntu" else f"latest-{os_}"
         latest = [f"{stem}-{profile}"] + ([stem] if profile == "default" else [])
-    return tags + latest + pinned
+    return tags + pinned, latest
 
 
 def plan_for(supported):
@@ -115,6 +120,7 @@ def entries(chosen, newest_full, sha7=""):
     for minor, full in chosen:
         newest = full == newest_full
         for os_, profile in plan_for(newest):
+            tags, latest = tags_for(minor, full, os_, profile, newest, sha7)
             out.append({
                 "version": full,
                 "minor": minor,
@@ -124,7 +130,8 @@ def entries(chosen, newest_full, sha7=""):
                 "experimental": os_ == "alpine",
                 "name": f"{minor}-{os_}-{profile}" if os_ != "ubuntu" else f"{minor}-{profile}",
                 "cache": f"{minor}-{os_}-{profile}",
-                "tags": " ".join(tags_for(minor, full, os_, profile, newest, sha7)),
+                "tags": " ".join(tags),
+                "latest_tags": " ".join(latest),
             })
     return out
 
