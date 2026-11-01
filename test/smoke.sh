@@ -8,7 +8,8 @@
 #       bash /src/test/smoke.sh
 #
 # Proves the three things downstream repos rely on:
-#   1. ns3-build-contrib builds a mounted C++20 contrib module and its test
+#   1. ns3-build-contrib builds a mounted contrib module (C++17..C++23, the
+#      tree's own standard) and its test
 #      suite passes under test.py;
 #   2. the cache is warm: Ninja's step count for that build stays small, i.e.
 #      the stock libraries were NOT recompiled. A configure-flag drift between

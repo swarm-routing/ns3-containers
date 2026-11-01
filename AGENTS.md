@@ -7,27 +7,33 @@ before changing anything. Org-wide conventions:
 
 ## What this repo is
 
-Builds and publishes `ghcr.io/swarm-routing/ns3-dev:<ns3-version>-<profile>`:
-ns-3 pre-configured and pre-built with Ninja at `/opt/ns-3`, so a downstream
-contrib module compiles alone in seconds. Profiles: `debug` (CI default),
-`sanitized` (ASan+LSan+UBSan), `optimized` (ns-3 `-d release`, campaigns only).
-`ns3-build-contrib` links mounted modules into the tree and builds them.
+Builds and publishes `ghcr.io/swarm-routing/ns3-dev` (public): ns-3
+pre-configured and pre-built with Ninja at `/opt/ns-3`, so a downstream contrib
+module compiles alone in seconds. The ten newest ns-3 releases, generated from
+upstream tags by `tools/ns3_matrix.py` (tiers, bases and tags: README "Which
+image"). Profiles: `default` (ns-3 `-d default`, the plain `:<ver>` tag),
+`debug` (CI default), `sanitized` (ASan+LSan+UBSan), `optimized` (ns-3
+`-d release`, campaigns only). Bases: Ubuntu 24.04 (default), Debian 13,
+Debian 13 slim, Alpine (experimental). `ns3-build-contrib` links mounted
+modules into the tree and builds them.
 
 ```
-docker/Dockerfile                 NS3_VERSION x BUILD_PROFILE image
+docker/Dockerfile                 BASE_IMAGE x NS3_VERSION x BUILD_PROFILE image
+tools/ns3_matrix.py               the version window, tiers, base digests and tags (+ test_ns3_matrix.py)
 docker/scripts/build-contrib.sh   -> /usr/local/bin/ns3-build-contrib
 test/smoke.sh                     image smoke (incremental build + test.py + guards)
-test/fixtures/swarm-hello/        minimal C++20 contrib module used by the smoke (GPL-2.0-only: an ns-3 module)
-.github/workflows/publish-images.yml   build -> smoke -> push (main) per version x profile
+test/fixtures/swarm-hello/        minimal contrib module (C++17..C++23) used by the smoke (GPL-2.0-only: an ns-3 module)
+.github/workflows/publish-images.yml   resolve matrix -> build -> smoke -> push (main) -> sign -> attest; weekly new releases
 .github/workflows/licence.yml     licence headers (tooling MIT OR GPL-2.0-only, rest GPL-2.0-only)
 ```
 
 ## Build & verify
 
 ```bash
-docker build -f docker/Dockerfile --build-arg NS3_VERSION=3.43 \
-    --build-arg BUILD_PROFILE=debug -t ns3-dev:3.43-debug .        # ~8 min on 4 cores
-docker run --rm -v "$PWD:/src:ro" ns3-dev:3.43-debug bash /src/test/smoke.sh
+python3 -m unittest discover -s tools                               # matrix generator
+docker build -f docker/Dockerfile --build-arg NS3_VERSION=3.48 \
+    --build-arg BUILD_PROFILE=debug -t ns3-dev:3.48-debug .        # ~8-15 min on 4 cores
+docker run --rm -v "$PWD:/src:ro" ns3-dev:3.48-debug bash /src/test/smoke.sh
 shellcheck docker/scripts/build-contrib.sh test/smoke.sh
 actionlint .github/workflows/*.yml
 ```
@@ -86,7 +92,8 @@ Org-wide (1–9), then this repo's own.
 11. **`optimized` is ns-3's `release` profile, never ns-3's `optimized`** (`-march=native` makes an image SIGILL on another CPU).
 12. **CI consumes `debug`/`sanitized`, never `optimized`.** Asserts catch real bugs (AntHocNet #123).
 13. **Pinned inputs.** The base image by digest; actions by SHA. A published number pins the immutable `:<ver>-<profile>-<sha7>` tag, not the rolling one.
-14. **One buildx cache scope per version x profile** (`mode=max`); drop a scope when its version leaves the matrix.
+14. **One buildx cache scope per version x base x profile** (`mode=max`, registry cache in `ns3-dev-cache`); delete a scope's tag when its version leaves the window.
+15. **The version list is generated, never typed.** `tools/ns3_matrix.py` reads upstream tags; a hand-pinned version would silently stop the window from moving.
 
 ## Conventions
 
@@ -122,7 +129,8 @@ Org-wide (1–9), then this repo's own.
 
 | You want to… | Go to |
 |--------------|-------|
-| Add an ns-3 version or profile | `publish-images.yml` matrix + `Dockerfile` profile `case` |
+| Add an ns-3 version | nothing: the weekly run picks up a new upstream tag (`tools/ns3_matrix.py`); `workflow_dispatch` with `versions` rebuilds one |
+| Change the tiers, a base image digest, or add a profile | `tools/ns3_matrix.py` (+ its test) and the `Dockerfile` profile `case` |
 | Add a stock ns-3 module to the images | `NS3_MODULES` in `docker/Dockerfile` (every downstream repo inherits it) |
 | Change how contrib modules build | `docker/scripts/build-contrib.sh` (+ `test/smoke.sh`) |
 | The reference image this was derived from | AntHocNet `docker/Dockerfile.ns3`, `.github/workflows/images.yml` |

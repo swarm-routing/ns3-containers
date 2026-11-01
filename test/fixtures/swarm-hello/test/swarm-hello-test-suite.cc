@@ -20,7 +20,7 @@ private:
         uint16_t v = 0;
         NS_TEST_ASSERT_MSG_EQ(SwarmHelloReadLe16(le, v), true, "two bytes must read");
         NS_TEST_ASSERT_MSG_EQ(v, 0x1234, "little-endian order");
-        NS_TEST_ASSERT_MSG_EQ(SwarmHelloReadLe16(std::span(le).first(1), v), false,
+        NS_TEST_ASSERT_MSG_EQ(SwarmHelloReadLe16(SwarmHelloBytes(le).first(1), v), false,
                               "short buffer must be refused");
 
         NodeContainer nodes;
