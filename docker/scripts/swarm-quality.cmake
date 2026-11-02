@@ -44,13 +44,23 @@ function(_swarm_quality_apply)
       file(GLOB_RECURSE _hdrs ${PROJECT_SOURCE_DIR}/contrib/${m}/*.h)
       foreach(h IN LISTS _hdrs)
         get_filename_component(_name ${h} NAME)
-        # Only headers this module exports: ns-3's own ns3/<h> wrapper names
-        # the header's path, so a private header that shares a stock
-        # header's name (a module-local packet.h) never shadows ns3/packet.h.
+        # Only headers this module exports: ns-3's own ns3/<h> names the
+        # header (a one-line #include "<path>" wrapper on 3.40+, a symlink on
+        # 3.36-3.39), so a private header that shares a stock header's name
+        # (a module-local packet.h) never shadows ns3/packet.h.
         foreach(g IN LISTS _gen)
           if(EXISTS ${g}/ns3/${_name})
-            file(READ ${g}/ns3/${_name} _wrapper)
-            string(FIND "${_wrapper}" "${h}" _pos)
+            set(_pos -1)
+            if(IS_SYMLINK ${g}/ns3/${_name})
+              file(REAL_PATH ${g}/ns3/${_name} _target)
+              file(REAL_PATH ${h} _real)
+              if(_target STREQUAL _real)
+                set(_pos 0)
+              endif()
+            else()
+              file(READ ${g}/ns3/${_name} _wrapper)
+              string(FIND "${_wrapper}" "${h}" _pos)
+            endif()
             if(_pos GREATER -1)
               file(WRITE ${_own}/ns3/${_name} "#include \"${h}\"\n")
               break()
