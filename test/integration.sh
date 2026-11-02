@@ -118,7 +118,14 @@ optional() {  # optional NAME BIN DELIVERY-REGEX ARGS...
 optional first "$first" ""
 optional aodv-example "$aodv_ex" ' [1-9][0-9]* received' --time=10 --size=10
 optional dsdv-manet "$dsdv_ex" "" --totalTime=30 --nWifis=20 --nSinks=5
-optional olsr-hna "$olsr_ex" 'Received one packet'
+# olsr-hna reports delivery with NS_LOG_UNCOND, which the optimized profile
+# compiles out: there it only has to finish.
+if [ "$BUILD_PROFILE" = optimized ]; then
+    echo "  SKIP  olsr-hna delivery check: its output is NS_LOG_UNCOND, compiled out in optimized"
+    optional olsr-hna "$olsr_ex" ""
+else
+    optional olsr-hna "$olsr_ex" 'Received one packet'
+fi
 for p in aodv olsr dsdv; do
     run "dense-$p" 'received=[1-9]' "$canary" --protocol="$p" --range=175
     run "sparse-$p" "" "$canary" --protocol="$p" --range=100
