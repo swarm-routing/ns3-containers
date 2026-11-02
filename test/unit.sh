@@ -44,11 +44,18 @@ start=$(date +%s)
 timeout "$BUDGET" ./test.py --no-build --nocolor -c unit -f QUICK >/tmp/test.log 2>&1
 rc=$?
 took=$(( $(date +%s) - start ))
-grep -E '^[0-9]+ of [0-9]+ tests passed' /tmp/test.log || true
 echo "unit: test.py took ${took} s (exit $rc)"
 if [ "$rc" -eq 124 ] || { [ "$rc" -eq 143 ] && [ "$took" -ge "$BUDGET" ]; }; then
     echo "unit: test.py did not finish within ${BUDGET} s" >&2
     tail -20 /tmp/test.log >&2
+    exit 1
+fi
+# An empty run (no suite discovered) must not read as a pass.
+summary=$(grep -E '^[0-9]+ of [0-9]+ tests passed' /tmp/test.log | tail -1)
+echo "${summary:-unit: no test.py completion summary}"
+if ! grep -qE '^[0-9]+ of [1-9][0-9]* tests passed' <<<"$summary"; then
+    tail -20 /tmp/test.log >&2
+    echo "unit: test.py ran no suite" >&2
     exit 1
 fi
 mapfile -t failed < <(sed -nE 's/^\[[0-9]+\/[0-9]+\] (FAIL|CRASH|VALGR): TestSuite ([^ ]+).*/\2/p' /tmp/test.log | sort -u)
@@ -70,11 +77,16 @@ for s in "${failed[@]}"; do
         fails=$((fails + 1))
     fi
 done
+mapfile -t passed < <(sed -nE 's/^\[[0-9]+\/[0-9]+\] PASS: TestSuite ([^ ]+).*/\1/p' /tmp/test.log | sort -u)
 while read -r s issue; do
     [ -n "$s" ] || continue
-    if ! printf '%s\n' "${failed[@]}" | grep -qxF "$s"; then
+    if printf '%s\n' "${failed[@]}" | grep -qxF "$s"; then
+        continue    # reported as XFAIL above
+    elif printf '%s\n' "${passed[@]}" | grep -qxF "$s"; then
         echo "  FAIL  unit:$s passed, but test/known-failures.txt expects it to fail ($issue); remove the entry" >&2
         fails=$((fails + 1))
+    else
+        echo "  SKIP  unit:$s: listed in test/known-failures.txt ($issue) but not run in the $group group"
     fi
 done <<<"$expected"
 
