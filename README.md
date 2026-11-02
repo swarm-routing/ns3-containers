@@ -120,6 +120,7 @@ passes its matrix entry and commit):
 |---|---|
 | `labels` | the OCI labels: source, licence, ns-3 version, profile, base, revision |
 | `structure` | `/opt/ns-3` configured and built, `ns3-build-contrib` on `PATH`, the environment, the recorded configure line and module list (equal to the Dockerfile's, every module built), the CMake cache matching the profile (build type, asserts, logs, sanitizers, no native optimizations, examples and tests on), the C++ standard the tree requires |
+| `profile` | the profile does what its name says: asserts abort and `NS_LOG` prints (`default`, `debug`, `sanitized`) or both are compiled out (`optimized`); on `sanitized`, a planted use-after-free, leak and signed overflow are each reported by ASan, LSan and UBSan; no AVX/AVX-512 instruction in the stock core library (nothing built for the build machine's CPU) |
 | `smoke` | builds `test/fixtures/swarm-hello`, runs its test.py suite, fails above 40 Ninja steps (the warm cache was missed) |
 
 | `integration` | ns-3 actually simulates: the tutorial `first`, and [`manet-canary`](test/fixtures/manet-canary/) (16 nodes, random waypoint) with AODV, OLSR and DSDV, dense (must deliver) and sparse (partitioned), each under a wall-clock budget: a run that does not finish is a hang |
@@ -129,8 +130,8 @@ expected on one exact ns-3 version; each shows in the step summary as XFAIL,
 and an expected failure that passes fails the stage. Today:
 **ns-3.49's stock AODV hangs in the sparse run** (#35).
 
-More stages are coming (#36): security, ns-3's own unit suites, profile
-checks, fixed-seed regression and a downstream canary.
+More stages are coming (#36): security, ns-3's own unit suites,
+fixed-seed regression and a downstream canary.
 
 **What is tested is what is published.**
 [`publish-images.yml`](.github/workflows/publish-images.yml) builds each image
