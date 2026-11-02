@@ -4,8 +4,8 @@
 # Pre-built ns-3 for swarm-routing contrib modules.
 #
 #   docker build -f docker/Dockerfile \
-#       --build-arg NS3_VERSION=3.43 --build-arg BUILD_PROFILE=debug \
-#       -t ghcr.io/swarm-routing/ns3-dev:3.43-debug .
+#       --build-arg NS3_VERSION=3.49 --build-arg BUILD_PROFILE=debug \
+#       -t ghcr.io/swarm-routing/ns3-dev:3.49-debug .
 #
 # NS3_VERSION is the upstream tag without its `ns-` prefix (3.46.1 for a patch
 # release). BASE_IMAGE/BASE_OS pick the base; the publish workflow passes them
@@ -34,7 +34,7 @@ ARG BASE_IMAGE=ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf94917
 FROM ${BASE_IMAGE} AS build
 
 ARG BASE_OS=ubuntu
-ARG NS3_VERSION=3.43
+ARG NS3_VERSION=3.49
 ARG BUILD_PROFILE=debug
 # Routing-essential modules only; ns-3 resolves their dependencies. `mesh`
 # (802.11s/HWMP) is a routing comparator AntHocNet's harness links.

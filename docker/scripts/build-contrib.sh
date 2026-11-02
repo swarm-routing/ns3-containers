@@ -16,7 +16,7 @@
 #   --run "PROG ARGS"  `./ns3 run` a program after the build (repeatable)
 #
 # A module's name is its directory's basename, and must match the `LIBNAME` of
-# its `build_lib()` call (e.g. swarm-core/ -> libns3.43-swarm-core). List
+# its `build_lib()` call (e.g. swarm-core/ -> libns3.49-swarm-core). List
 # dependencies first: `ns3-build-contrib /src/ns3-swarm-core /src/ARA/ns3`
 # only works if the second directory is named for its module, so mount or
 # check out as `.../ara`, or pass `name=dir` (e.g. `ara=/src/ARA/ns3`).
