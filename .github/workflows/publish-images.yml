@@ -142,6 +142,7 @@ jobs:
             NS3_VERSION=${{ matrix.version }}
             BUILD_PROFILE=${{ matrix.profile }}
             REVISION=${{ github.sha }}
+            BUILD_RUN=${{ github.run_id }}-${{ github.run_attempt }}
           tags: ${{ env.WRITE_REGISTRY == 'true' && format('{0}:{1}-{2}-{3}', env.CANDIDATE, github.run_id, github.run_attempt, matrix.name) || format('ns3-dev-local:{0}', matrix.name) }}
           push: ${{ env.WRITE_REGISTRY == 'true' }}
           # A fork PR cannot push: it loads the image and is tested in place.
@@ -172,6 +173,7 @@ jobs:
           EXPECT_PROFILE: ${{ matrix.profile }}
           EXPECT_OS: ${{ matrix.os }}
           EXPECT_REVISION: ${{ github.sha }}
+          EXPECT_BUILD_RUN: ${{ github.run_id }}-${{ github.run_attempt }}
         run: test/run.sh "ns3-dev-local:${NAME}"
 
   test:
@@ -214,6 +216,7 @@ jobs:
           EXPECT_PROFILE: ${{ matrix.profile }}
           EXPECT_OS: ${{ matrix.os }}
           EXPECT_REVISION: ${{ github.sha }}
+          EXPECT_BUILD_RUN: ${{ github.run_id }}-${{ github.run_attempt }}
         run: test/run.sh "$REF"
       - name: Mark as passed
         run: mkdir -p pass && cp marker/digest pass/digest
@@ -390,11 +393,20 @@ jobs:
           done
           base="/orgs/${ORG}/packages/container/ns3-dev-ci/versions"
           gh api --paginate "${base}?per_page=100" --jq '.[] | "\(.id) \(.name)"' > versions
-          n=0; kept=0
+          n=0; refused=()
           while read -r id name; do
             grep -qxF "$name" doomed || continue
-            # GHCR refuses to delete a package's last version; the daily
-            # cleanup takes it later.
-            if gh api -X DELETE "${base}/${id}" > /dev/null 2>&1; then n=$((n + 1)); else kept=$((kept + 1)); fi
+            if gh api -X DELETE "${base}/${id}" > /dev/null 2>&1; then n=$((n + 1)); else refused+=("$id"); fi
           done < versions
-          echo "discarded ${n} candidate versions of this run ($(wc -l < doomed) digests; ${kept} left for candidates-cleanup)" >> "$GITHUB_STEP_SUMMARY"
+          echo "discarded ${n} candidate versions of this run ($(wc -l < doomed) digests)" >> "$GITHUB_STEP_SUMMARY"
+          # GHCR refuses to delete a package's last version, and only that one
+          # may be refused: anything else is a real failure.
+          if [ "${#refused[@]}" -gt 0 ]; then
+            left=$(gh api --paginate "${base}?per_page=100" --jq '.[].id' | wc -l)
+            if [ "${#refused[@]}" -eq 1 ] && [ "$left" -eq 1 ]; then
+              echo "kept version ${refused[0]}: the package's last version (candidates-cleanup takes it later)" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "::error::could not delete candidate versions ${refused[*]} (${left} versions remain)"
+              exit 1
+            fi
+          fi
