@@ -138,7 +138,7 @@ downstream canary.
 **What is tested is what is published.**
 [`publish-images.yml`](.github/workflows/publish-images.yml) builds each image
 **once** and pushes it to the candidate package `ghcr.io/swarm-routing/ns3-dev-ci`
-(not for consumers; deleted after 7 days). The tests run on that candidate
+(not for consumers; each clean run, PRs included, deletes its own, and a daily job sweeps leftovers and the cache's untagged versions). The tests run on that candidate
 **by digest**. Only an image whose tests passed gets its `ns3-dev` tags, as a
 byte-identical copy of the tested digest (no rebuild), then a keyless cosign
 signature and a provenance attestation. The `latest-*` tags move last, and
