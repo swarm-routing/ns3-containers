@@ -69,12 +69,18 @@ stock() {  # stock VAR TARGET GLOB -> sets VAR to the executable, or empty
         tail -20 <<<"$log" >&2
         stock_fail=1; return 0
     fi
-    printf -v "$1" '%s' "$(compgen -G "$NS3/build/$3" | head -1)"
+    local g pats
+    read -ra pats <<<"$3"  # GLOB may list several patterns; the first match wins
+    for g in "${pats[@]}"; do
+        printf -v "$1" '%s' "$(compgen -G "$NS3/build/$g" | head -1)"
+        [ -z "${!1}" ] || return 0
+    done
 }
 stock first first "examples/tutorial/ns3*-first*"
 # ns-3.40-3.42 call the AODV example `aodv`, later releases `aodv-example`.
 stock aodv_ex aodv-example "src/aodv/examples/ns3*-aodv-example*"
-[ -n "$aodv_ex" ] || stock aodv_ex aodv "src/aodv/examples/ns3*-aodv[-.]*"
+# Release-profile executables carry no profile suffix (ns3.40-aodv).
+[ -n "$aodv_ex" ] || stock aodv_ex aodv "src/aodv/examples/ns3*-aodv src/aodv/examples/ns3*-aodv-*"
 stock dsdv_ex dsdv-manet "src/dsdv/examples/ns3*-dsdv-manet*"
 stock olsr_ex olsr-hna "src/olsr/examples/ns3*-olsr-hna*"
 [ "$stock_fail" -eq 0 ] || { echo "integration: a stock example failed to build" >&2; exit 1; }

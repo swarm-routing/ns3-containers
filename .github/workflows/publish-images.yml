@@ -288,12 +288,17 @@ jobs:
           sha7="${GITHUB_SHA::7}"
           set_tags=(); kept=()
           for t in $TAGS; do
-            if [[ "$t" == *"-${sha7}" ]] && \
-               cur=$(docker buildx imagetools inspect "${IMAGE}:${t}" --format '{{json .Manifest}}' 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["digest"])') && \
-               [ -n "$cur" ] && [ "$cur" != "$DIGEST" ]; then
-              kept+=("$t ($cur)")
-            else
+            if [[ "$t" != *"-${sha7}" ]]; then set_tags+=("$t"); continue; fi
+            # Fail closed: only a tag the registry confirms absent is new; any
+            # other lookup error stops promotion rather than move a pin.
+            if out=$(docker buildx imagetools inspect "${IMAGE}:${t}" --format '{{json .Manifest}}' 2>&1); then
+              cur=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["digest"])' <<<"$out")
+              if [ "$cur" = "$DIGEST" ]; then set_tags+=("$t"); else kept+=("$t ($cur)"); fi
+            elif grep -qiE 'not found|manifest unknown' <<<"$out"; then
               set_tags+=("$t")
+            else
+              echo "$out" >&2
+              echo "::error::cannot tell whether ${IMAGE}:${t} exists; not promoting"; exit 1
             fi
           done
           args=()
