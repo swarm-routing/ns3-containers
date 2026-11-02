@@ -87,15 +87,42 @@ else
 fi
 
 # No instruction for a newer CPU than the x86-64 baseline in the stock tree.
+# Every AVX/AVX2/AVX-512 instruction is VEX/EVEX-encoded, which objdump prints
+# with a `v` mnemonic (vmovaps, vpxor, vzeroupper, ...), whatever its
+# registers; the baseline's only v-mnemonics are verr/verw.
+avx_scan() {  # avx_scan LIB -> 0 clean, 1 AVX found, 2 objdump failed
+    local dis
+    dis=$(mktemp)
+    if ! objdump -d --no-show-raw-insn "$1" > "$dis" 2>/dev/null; then rm -f "$dis"; return 2; fi
+    # One awk over the file, no pipe: a pipe into an early-exiting grep -q can
+    # SIGPIPE objdump/grep and, under pipefail, turn a match into a miss.
+    awk '$1 ~ /^[0-9a-f]+:$/ && $2 ~ /^v[a-z0-9]+$/ && $2 !~ /^ver[rw]$/ {found = 1; exit}
+         END {exit found ? 1 : 0}' "$dis"
+    local rc=$?
+    rm -f "$dis"
+    return "$rc"
+}
 core=$(compgen -G "$NS3/build/lib/libns3*-core*.so" | grep -v -- "-core-test" | head -1)
 case "$(uname -m)" in
     x86_64)
         if ! command -v objdump >/dev/null; then
             skip "AVX scan: objdump not in this image"
-        elif objdump -d --no-show-raw-insn "$core" | grep -qE '%[yz]mm[0-9]'; then
-            bad "$(basename "$core") uses AVX/AVX-512 registers: built for the build machine's CPU"
         else
-            ok "no AVX/AVX-512 instruction in $(basename "$core")"
+            avx_scan "$core"
+            case $? in
+                0) ok "no AVX/AVX-512 instruction in $(basename "$core")" ;;
+                1) bad "$(basename "$core") contains AVX/AVX-512 (VEX/EVEX) instructions: built for the build machine's CPU" ;;
+                *) bad "objdump could not disassemble $(basename "$core")" ;;
+            esac
+            # Self-check: the scan must see AVX in a library built with -mavx.
+            if printf 'void f(float*a,float*b){for(int i=0;i<64;i++)a[i]+=b[i];}\n' > /tmp/avx.c \
+                && c++ -x c++ -O2 -mavx -fPIC -shared -o /tmp/libavx.so /tmp/avx.c 2>/dev/null; then
+                avx_scan /tmp/libavx.so
+                [ $? -eq 1 ] && ok "AVX scan self-check: detects -mavx code" \
+                    || bad "AVX scan self-check: missed AVX in a -mavx library"
+            else
+                skip "AVX scan self-check: could not build a -mavx library"
+            fi
         fi ;;
     *) skip "AVX scan: not an x86-64 image ($(uname -m))" ;;
 esac
