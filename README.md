@@ -162,6 +162,31 @@ only when every required image of the run passed. On-demand builds of older
 releases go through the same tests. The buildx cache lives in
 `ghcr.io/swarm-routing/ns3-dev-cache`, one tag per version × base × profile.
 
+## Known issues and findings
+
+Found by the image test pipeline (#36). Each one has an issue with the full
+evidence; this is the summary a user of the images needs.
+
+| ns-3 | What | Status |
+|---|---|---|
+| **3.49** (the supported release, `latest`) | **Stock AODV never finishes a sparse MANET run.** ns-3.49's new `Ipv4L3Protocol::SendIcmpNoRoute` (RFC 1812 ICMP "net unreachable") feeds back into AODV's deferred route output: the ICMP error has no route either, is queued through loopback into the full request queue, whose drop raises another ICMP error, all at one simulated instant (1,284,336 errors at +8.146253127 s in one run). Simulated time stops; the process spins until killed. OLSR and DSDV are unaffected; AODV-derived protocols (AntHocNet's vendored AOMDV) hang too. Reproducer, stock models only: [`manet-canary`](test/fixtures/manet-canary/) `--protocol=aodv --range=100`, which finishes in 2 s on 3.48 and never on 3.49; stock `manet-routing-compare` with its defaults does *not* trigger it. ns-3-dev still has the code (2026-11-01); no upstream report filed yet. | upstream bug; reproduced on every run as a strict expected failure (`test/known-failures.txt`); [#35](https://github.com/swarm-routing/ns3-containers/issues/35), [AntHocNet#843](https://github.com/danieljoppi/AntHocNet/issues/843) |
+| **3.48** (history, on demand) | **Four wifi unit suites fail** (`wifi-txop`, `wifi-mlo`, `wifi-gcr`, `wifi-emlsr-basic-exchanges`) with the images' 16-module set, on both profiles; they **pass** on 3.48 with every ns-3 module and on 3.49 with the images' set. With the images' set the simulation transmits fewer frames than the test expects, and the test then indexes past its frame list (UBSan: member call on an invalid `WifiMacHeader` at `wifi-txop-test.cc:1427`, a SIGSEGV without sanitizers). The suites test 802.11ax/be machinery (EMLSR, MLO, groupcast, TXOP limits) that 802.11a/b ad-hoc MANET work does not use. | cause not yet classified (module dependency vs ns-3 test bug); an on-demand 3.48 build fails the `unit` stage until it is; [#49](https://github.com/swarm-routing/ns3-containers/issues/49) |
+
+Corrections that came out of the tests:
+
+- **C++ standard per release**, read from each tree's
+  `CMAKE_CXX_STANDARD_MINIMUM`: C++17 for 3.40, C++20 for 3.41–3.45, C++23 from
+  3.46 (this README used to say C++20 up to 3.48).
+- **Release-profile binaries have no profile suffix** (`ns3.49-first`, not
+  `ns3.49-first-optimized`): scripts that glob `ns3*-<name>-*` find nothing on
+  `optimized` images; use `ns3*-<name>*`.
+- **Alpine's `timeout` is BusyBox's**: a timed-out command exits 143 (SIGTERM),
+  not GNU's 124.
+- **`./ns3 configure` keeps cached options**: reconfiguring without
+  `--enable-modules` or `--filter-module-examples-and-tests` keeps the previous
+  values from `cmake-cache/`; pass them explicitly (as `ns3-build-contrib` and
+  the test stages do), or delete `cmake-cache/` for a fresh configure.
+
 ## Licence
 
 Per directory, as AntHocNet ([LICENSING.md](LICENSING.md)): the image tooling
