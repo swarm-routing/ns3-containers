@@ -87,7 +87,7 @@ docker run --rm -v "$PWD:/src/ara:ro" ghcr.io/swarm-routing/ns3-dev:3.49-debug \
     ns3-build-contrib --test /src/ara
 ```
 
-`ns3-build-contrib [--test] [--suite S]... [--modules "a;b"] [--run "PROG ARGS"]... <dir|name=dir>...`
+`ns3-build-contrib [--test] [--suite S]... [--modules "a;b"] [--run "PROG ARGS"]... [--strict-warnings] [--coverage] <dir|name=dir>...`
 symlinks each directory into `/opt/ns-3/contrib/<name>`, reconfigures with the
 image's own flags (stored in `/opt/ns-3/.swarm-configure.env`), builds, then
 runs the test suites and programs. Dependencies go first:
@@ -95,6 +95,33 @@ runs the test suites and programs. Dependencies go first:
 ```bash
 ns3-build-contrib swarm-core=/src/ns3-swarm-core ara=/src/ARA/ns3 --test
 ```
+
+Two quality options touch the named modules only, never ns-3, so the build
+stays incremental:
+
+- `--strict-warnings` compiles them with `-Wall -Wextra -Wpedantic -Wshadow
+  -Wnon-virtual-dtor -Wold-style-cast -Wcast-align -Woverloaded-virtual
+  -Wnull-dereference -Wformat=2 -Werror`; ns-3's headers are `-isystem` for
+  them, so only the module's own code is judged (its own headers too, also
+  when included as `ns3/<header>.h`).
+- `--coverage` compiles and links them with `--coverage` (gcov); after
+  `--test`, the `.gcda` files are under `/opt/ns-3/cmake-cache/contrib/<name>/`.
+  The image has no `gcovr`, and the `.gcda` files go with the container, so
+  report in the same run:
+
+  ```bash
+  docker run --rm -v "$PWD:/src/ara:ro" ghcr.io/swarm-routing/ns3-dev:latest-debug bash -c '
+      ns3-build-contrib --coverage --test ara=/src/ara/ns3 &&
+      apt-get update -qq && apt-get install -y -qq gcovr >/dev/null &&
+      cd /opt/ns-3/cmake-cache && gcovr --root /src/ara/ns3 --filter /src/ara/ns3/ .'
+  ```
+
+- `--quality-modules "a;b"` limits both to those modules (default: every
+  module given), so a dependency built alongside is not judged:
+  `ns3-build-contrib --strict-warnings --quality-modules ara swarm-core=/src/ns3-swarm-core ara=/src/ara/ns3`.
+
+The org's `reusable-ns3-ci.yml` turns them on with its `strict-warnings` and
+`coverage` inputs.
 
 The name must match the module's `build_lib(LIBNAME …)`; `core` and stock
 module names are refused. CI repos use
