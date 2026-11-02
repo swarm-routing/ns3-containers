@@ -139,6 +139,7 @@ jobs:
             BASE_OS=${{ matrix.os }}
             NS3_VERSION=${{ matrix.version }}
             BUILD_PROFILE=${{ matrix.profile }}
+            REVISION=${{ github.sha }}
           tags: ${{ env.WRITE_REGISTRY == 'true' && format('{0}:{1}-{2}-{3}', env.CANDIDATE, github.run_id, github.run_attempt, matrix.name) || format('ns3-dev-local:{0}', matrix.name) }}
           push: ${{ env.WRITE_REGISTRY == 'true' }}
           # A fork PR cannot push: it loads the image and is tested in place.
@@ -168,6 +169,7 @@ jobs:
           EXPECT_VERSION: ${{ matrix.version }}
           EXPECT_PROFILE: ${{ matrix.profile }}
           EXPECT_OS: ${{ matrix.os }}
+          EXPECT_REVISION: ${{ github.sha }}
         run: test/run.sh "ns3-dev-local:${NAME}"
 
   test:
@@ -209,6 +211,7 @@ jobs:
           EXPECT_VERSION: ${{ matrix.version }}
           EXPECT_PROFILE: ${{ matrix.profile }}
           EXPECT_OS: ${{ matrix.os }}
+          EXPECT_REVISION: ${{ github.sha }}
         run: test/run.sh "$REF"
       - name: Mark as passed
         run: mkdir -p pass && cp marker/digest pass/digest

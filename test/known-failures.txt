@@ -1,0 +1,10 @@
+# Known upstream failures the integration stage expects (ns3-containers#42).
+#
+#   <exact NS3_VERSION> <check name> <tracking issue> <expected outcome>
+#
+# A listed check must fail exactly as described (strict expected failure): if
+# it passes, the stage fails and asks for the entry to be removed. Keyed by the
+# exact ns-3 version, so a point release or the next release is tested
+# without the exception. Every entry shows in the step summary. Remove an
+# entry when its ns-3 release stops being the supported one.
+3.49 sparse-aodv ns3-containers#35 timeout

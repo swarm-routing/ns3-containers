@@ -13,7 +13,8 @@
 # with this repository mounted read-only at /src, so no stage sees another's
 # changes and the image itself is never modified.
 #
-# EXPECT_VERSION, EXPECT_PROFILE and EXPECT_OS (the pipeline's matrix entry)
+# EXPECT_VERSION, EXPECT_PROFILE, EXPECT_OS (the pipeline's matrix entry) and
+# EXPECT_REVISION (the commit that built it)
 # are passed to the stages that compare against them; unset, those
 # comparisons are skipped and say so.
 #
@@ -27,16 +28,26 @@ image=$1
 repo=$(cd "$(dirname "$0")/.." && pwd)
 summary=${GITHUB_STEP_SUMMARY:-/dev/null}
 
+notes=$(mktemp)
+print_notes() {
+    [ -s "$notes" ] || return 0
+    { echo; echo "Notes (expected failures and skips):"; echo; sed 's/^/- /' "$notes"; } >> "$summary"
+}
+trap print_notes EXIT
+
 stage() {
     local name=$1; shift
-    local start rc
+    local start rc out
     start=$(date +%s)
+    out=$(mktemp)
     echo "::group::stage: $name"
     set +e
-    "$@"
-    rc=$?
+    "$@" 2>&1 | tee "$out"
+    rc=${PIPESTATUS[0]}
     set -e
     echo "::endgroup::"
+    grep -E '^ *(XFAIL|SKIP) ' "$out" | sed "s/^ */[$name] /" >> "$notes" || true
+    rm -f "$out"
     local took=$(( $(date +%s) - start ))
     if [ "$rc" -eq 0 ]; then
         echo "| $name | pass | ${took} s |" >> "$summary"
@@ -61,7 +72,8 @@ labels() {
                 "org.opencontainers.image.licenses=GPL-2.0-only" \
                 "org.opencontainers.image.version=${EXPECT_VERSION:-}" \
                 "io.github.swarm-routing.ns3.profile=${EXPECT_PROFILE:-}" \
-                "io.github.swarm-routing.ns3.base=${EXPECT_OS:-}"; do
+                "io.github.swarm-routing.ns3.base=${EXPECT_OS:-}" \
+                "org.opencontainers.image.revision=${EXPECT_REVISION:-}"; do
         key=${pair%%=*}; want=${pair#*=}
         got=$(docker image inspect --format "{{ index .Config.Labels \"$key\" }}" "$image")
         if [ -z "$want" ]; then
@@ -85,3 +97,4 @@ labels() {
 stage labels labels
 stage structure in_image bash /src/test/structure.sh
 stage smoke in_image bash /src/test/smoke.sh
+stage integration in_image bash /src/test/integration.sh

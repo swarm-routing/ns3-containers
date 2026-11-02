@@ -110,18 +110,27 @@ docker build -f docker/Dockerfile --build-arg NS3_VERSION=3.48 \
 test/run.sh ns3-dev:3.48-debug                             # every test stage, as CI runs them
 ```
 
-`test/run.sh <image>` runs every test stage against one image, each in a
-fresh container (pass `EXPECT_VERSION`, `EXPECT_PROFILE`, `EXPECT_OS` to
-compare against what the image should be; CI passes its matrix entry):
+`test/run.sh <image>` runs every test stage against one image: `labels` on
+the host from the image config, every other stage in a fresh container with
+this repository mounted read-only (pass `EXPECT_VERSION`, `EXPECT_PROFILE`,
+`EXPECT_OS`, `EXPECT_REVISION` to compare against what the image should be; CI
+passes its matrix entry and commit):
 
 | Stage | Checks |
 |---|---|
-| `labels` | the OCI labels: source, licence, ns-3 version, profile, base |
-| `structure` | `/opt/ns-3` configured and built, `ns3-build-contrib` on `PATH`, the environment, the recorded configure line, the CMake cache matching the profile (build type, asserts, logs, sanitizers, no native optimizations, examples and tests on), the C++ standard the tree requires |
+| `labels` | the OCI labels: source, licence, ns-3 version, profile, base, revision |
+| `structure` | `/opt/ns-3` configured and built, `ns3-build-contrib` on `PATH`, the environment, the recorded configure line and module list (equal to the Dockerfile's, every module built), the CMake cache matching the profile (build type, asserts, logs, sanitizers, no native optimizations, examples and tests on), the C++ standard the tree requires |
 | `smoke` | builds `test/fixtures/swarm-hello`, runs its test.py suite, fails above 40 Ninja steps (the warm cache was missed) |
 
+| `integration` | ns-3 actually simulates: the tutorial `first`, and [`manet-canary`](test/fixtures/manet-canary/) (16 nodes, random waypoint) with AODV, OLSR and DSDV, dense (must deliver) and sparse (partitioned), each under a wall-clock budget: a run that does not finish is a hang |
+
+[`test/known-failures.txt`](test/known-failures.txt) lists upstream ns-3 bugs
+expected on one exact ns-3 version; each shows in the step summary as XFAIL,
+and an expected failure that passes fails the stage. Today:
+**ns-3.49's stock AODV hangs in the sparse run** (#35).
+
 More stages are coming (#36): security, ns-3's own unit suites, profile
-checks, MANET example runs, fixed-seed regression and a downstream canary.
+checks, fixed-seed regression and a downstream canary.
 
 **What is tested is what is published.**
 [`publish-images.yml`](.github/workflows/publish-images.yml) builds each image

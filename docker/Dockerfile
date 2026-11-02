@@ -82,7 +82,11 @@ ENV NS3_VERSION=${NS3_VERSION} \
     BASE_OS=${BASE_OS} \
     NS3DIR=/opt/ns-3
 
+# The ns3-containers commit that built the image. Declared here, after every
+# build step, so a new commit changes only the image config, not a cached layer.
+ARG REVISION=unknown
 LABEL org.opencontainers.image.source="https://github.com/swarm-routing/ns3-containers" \
+      org.opencontainers.image.revision="${REVISION}" \
       org.opencontainers.image.version="${NS3_VERSION}" \
       io.github.swarm-routing.ns3.profile="${BUILD_PROFILE}" \
       io.github.swarm-routing.ns3.base="${BASE_OS}" \

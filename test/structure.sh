@@ -67,7 +67,22 @@ if [ -f "$envfile" ]; then
         *)         want="" ;;
     esac
     [ -n "$want" ] && [ "$r_flags" = "$want" ] && ok "profile flags '$r_flags'" || bad "profile flags '$r_flags', expected '$want'"
-    [ -n "$r_mods" ] && ok "module list recorded (${r_mods//;/ })" || bad "no NS3_MODULES recorded"
+    want_mods=$(sed -n 's/^ARG NS3_MODULES="\(.*\)"$/\1/p' /src/docker/Dockerfile 2>/dev/null)
+    if [ -z "$r_mods" ]; then
+        bad "no NS3_MODULES recorded"
+    elif [ -z "$want_mods" ]; then
+        skip "module list: no /src/docker/Dockerfile to compare with"
+    elif [ "$r_mods" = "$want_mods" ]; then
+        ok "module list = the Dockerfile's (${r_mods//;/ })"
+    else
+        bad "module list '$r_mods' differs from the Dockerfile's '$want_mods'"
+    fi
+    missing=""
+    IFS=';' read -ra mods <<<"$r_mods"
+    for m in "${mods[@]}"; do
+        compgen -G "$NS3/build/lib/libns3*-${m}*.so" >/dev/null || missing="$missing $m"
+    done
+    [ -z "$missing" ] && ok "every listed module's library is built" || bad "listed but not built:$missing"
 else
     bad "$envfile missing: ns3-build-contrib cannot reuse the configure line"
 fi
