@@ -41,7 +41,9 @@ function(_swarm_quality_apply)
       # exported headers, searched before the system tree, keep it judged.
       set(_own ${PROJECT_BINARY_DIR}/swarm-quality/${m}/include)
       file(REMOVE_RECURSE ${_own})
-      file(GLOB_RECURSE _hdrs ${PROJECT_SOURCE_DIR}/contrib/${m}/*.h)
+      file(GLOB_RECURSE _hdrs
+        ${PROJECT_SOURCE_DIR}/contrib/${m}/*.h ${PROJECT_SOURCE_DIR}/contrib/${m}/*.hh
+        ${PROJECT_SOURCE_DIR}/contrib/${m}/*.hpp ${PROJECT_SOURCE_DIR}/contrib/${m}/*.hxx)
       foreach(h IN LISTS _hdrs)
         get_filename_component(_name ${h} NAME)
         # Only headers this module exports: ns-3's own ns3/<h> names the

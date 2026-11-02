@@ -80,6 +80,19 @@ fi
 grep -q -- '-Werror=shadow' "$log" || { cat "$log"; echo "FAIL: the strict build failed, but not on -Wshadow" >&2; exit 1; }
 echo "smoke: --strict-warnings judges the module's own header through ns3/"
 
+# The same for an exported .hpp header (ns-3 exports whatever HEADER_FILES
+# lists, not only .h).
+hpp="$work/hpp/swarm-hello"
+mkdir -p "$work/hpp" && cp -r "$work/swarm-hello" "$hpp"
+printf '#pragma once\nnamespace ns3 {\ninline int SwarmHelloShadowHpp(int x) { int y = x; { int y = 2; x += y; } return x + y; }\n}  // namespace ns3\n' > "$hpp/model/swarm-hello-extra.hpp"
+sed -i 's|HEADER_FILES model/swarm-hello.h|HEADER_FILES model/swarm-hello.h model/swarm-hello-extra.hpp|' "$hpp/CMakeLists.txt"
+sed -i 's|#include "swarm-hello.h"|#include "swarm-hello.h"\n#include "ns3/swarm-hello-extra.hpp"|' "$hpp/model/swarm-hello.cc"
+if ns3-build-contrib --strict-warnings "$hpp" > "$log" 2>&1; then
+    echo "FAIL: --strict-warnings accepted a shadowed local in the module's own .hpp header" >&2; exit 1
+fi
+grep -q -- '-Werror=shadow' "$log" || { cat "$log"; echo "FAIL: the strict build failed, but not on -Wshadow" >&2; exit 1; }
+echo "smoke: --strict-warnings judges the module's own .hpp header through ns3/"
+
 # A private header that shares a stock header's name gets no wrapper: if it
 # did, it would shadow ns3/packet.h (pulled in by the fixture's test suite)
 # and the #error would fire.
