@@ -80,6 +80,16 @@ fi
 grep -q -- '-Werror=shadow' "$log" || { cat "$log"; echo "FAIL: the strict build failed, but not on -Wshadow" >&2; exit 1; }
 echo "smoke: --strict-warnings judges the module's own header through ns3/"
 
+# A private header that shares a stock header's name gets no wrapper: if it
+# did, it would shadow ns3/packet.h (pulled in by the fixture's test suite)
+# and the #error would fire.
+priv="$work/priv/swarm-hello"
+mkdir -p "$work/priv" && cp -r "$work/swarm-hello" "$priv"
+printf '#error "private packet.h must not shadow ns3/packet.h"\n' > "$priv/model/packet.h"
+ns3-build-contrib --strict-warnings --test "$priv" > "$log" 2>&1 || {
+    cat "$log"; echo "FAIL: a private header shadowed a stock ns3/ header under --strict-warnings" >&2; exit 1; }
+echo "smoke: --strict-warnings wraps exported headers only"
+
 # A dependency built alongside but left out by --quality-modules is not
 # judged: the shadowed header becomes module swarm-dep, the clean fixture the
 # module under test.
