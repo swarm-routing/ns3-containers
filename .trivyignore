@@ -1,0 +1,9 @@
+# Trivy findings accepted for the ns3-dev images, each with its reason
+# (ns3-containers#38). Only the security stage's Dockerfile scan reads this;
+# the vulnerability and secret scans take no exceptions.
+
+# DS-0002 (HIGH) "no non-root USER": deliberate. The images are build
+# environments, not services: ns3-build-contrib links modules into and
+# rebuilds /opt/ns-3, and CI runs them as GitHub Actions `container:` jobs,
+# which expect root. Users who want a non-root container pass `--user`.
+DS-0002

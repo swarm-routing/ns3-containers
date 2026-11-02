@@ -21,7 +21,8 @@ modules into the tree and builds them.
 docker/Dockerfile                 BASE_IMAGE x NS3_VERSION x BUILD_PROFILE image
 tools/ns3_matrix.py               supported release vs on-demand releases, base digests and tags (+ test_ns3_matrix.py)
 docker/scripts/build-contrib.sh   -> /usr/local/bin/ns3-build-contrib
-test/run.sh                       every test stage against one image ref (the candidate digest in CI)
+test/run.sh                       every test stage against one image ref (the candidate digest in CI); `security` runs Trivy (pinned by digest) on the host
+.trivyignore                      accepted Dockerfile findings, each with its reason (the vuln and secret scans take none)
 test/structure.sh                 image contract: tree, tools, env, configure record, CMake cache vs profile, C++ standard
 test/profile.sh                   the profile keeps its promise: asserts/logs on or off, sanitizers catch planted bugs, no AVX
 test/smoke.sh                     image smoke (incremental build + test.py + guards)
