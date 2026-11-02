@@ -12,7 +12,7 @@
 # is rebuilt) and runs, each under a wall-clock budget:
 #   first                 ns-3's tutorial example (point-to-point echo)
 #   aodv-example          ns-3's AODV example: 10-node chain, 10 s of pings; must deliver
-#   dsdv-manet            ns-3's DSDV example: 20 nodes, random waypoint, 30 s
+#   dsdv-manet            ns-3's DSDV example: 20 nodes, random waypoint, 30 s, data from 10 s
 #   olsr-hna              ns-3's OLSR HNA example; must deliver
 #   dense-<proto>         manet-canary, 16 nodes, 500 m, range 175 m, 60 s: must finish and deliver
 #   sparse-<proto>        the same with range 100 m: partitioned, must finish
@@ -55,16 +55,29 @@ fi
     || { tail -40 /tmp/build.log; echo "integration: build of manet-canary failed" >&2; exit 1; }
 canary=$(compgen -G "$NS3/build/scratch/manet-canary/ns3*-manet-canary*" | head -1)
 [ -x "$canary" ] || { echo "integration: built manet-canary executable not found" >&2; exit 1; }
-# Stock examples: built one by one, so a release that lacks one SKIPs it
-# instead of failing the whole build.
-stock() {  # stock TARGET GLOB -> prints the executable, or nothing
-    ./ns3 build "$1" >>/tmp/build.log 2>&1 || return 0
-    compgen -G "$NS3/build/$2" | head -1
+# Stock examples, built one by one. A target this release does not have is
+# skipped; a target it has that fails to build fails the stage.
+stock_fail=0
+first="" aodv_ex="" dsdv_ex="" olsr_ex=""
+stock() {  # stock VAR TARGET GLOB -> sets VAR to the executable, or empty
+    local log
+    printf -v "$1" '%s' ""
+    if ! log=$(./ns3 build "$2" 2>&1); then
+        echo "$log" >> /tmp/build.log
+        grep -q "Target to build does not exist" <<<"$log" && return 0
+        echo "  FAIL  $2: the release has this target but it does not build" >&2
+        tail -20 <<<"$log" >&2
+        stock_fail=1; return 0
+    fi
+    printf -v "$1" '%s' "$(compgen -G "$NS3/build/$3" | head -1)"
 }
-first=$(stock first "examples/tutorial/ns3*-first*")
-aodv_ex=$(stock aodv-example "src/aodv/examples/ns3*-aodv-example*")
-dsdv_ex=$(stock dsdv-manet "src/dsdv/examples/ns3*-dsdv-manet*")
-olsr_ex=$(stock olsr-hna "src/olsr/examples/ns3*-olsr-hna*")
+stock first first "examples/tutorial/ns3*-first*"
+# ns-3.40-3.42 call the AODV example `aodv`, later releases `aodv-example`.
+stock aodv_ex aodv-example "src/aodv/examples/ns3*-aodv-example*"
+[ -n "$aodv_ex" ] || stock aodv_ex aodv "src/aodv/examples/ns3*-aodv[-.]*"
+stock dsdv_ex dsdv-manet "src/dsdv/examples/ns3*-dsdv-manet*"
+stock olsr_ex olsr-hna "src/olsr/examples/ns3*-olsr-hna*"
+[ "$stock_fail" -eq 0 ] || { echo "integration: a stock example failed to build" >&2; exit 1; }
 echo "integration: built manet-canary and the stock examples; budget ${BUDGET} s per run"
 
 expected() {  # expected NAME -> prints the expected outcome, or nothing
@@ -117,7 +130,7 @@ optional() {  # optional NAME BIN DELIVERY-REGEX ARGS...
 }
 optional first "$first" ""
 optional aodv-example "$aodv_ex" ' [1-9][0-9]* received' --time=10 --size=10
-optional dsdv-manet "$dsdv_ex" "" --totalTime=30 --nWifis=20 --nSinks=5
+optional dsdv-manet "$dsdv_ex" "" --totalTime=30 --dataStart=10 --nWifis=20 --nSinks=5
 # olsr-hna reports delivery with NS_LOG_UNCOND, which the optimized profile
 # compiles out: there it only has to finish.
 if [ "$BUILD_PROFILE" = optimized ]; then

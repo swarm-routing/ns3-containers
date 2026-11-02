@@ -157,13 +157,16 @@ jobs:
         run: |
           case "$DIGEST" in sha256:*) ;; *) echo "no digest from the build: '$DIGEST'" >&2; exit 1 ;; esac
           mkdir -p marker && echo "$DIGEST" > "marker/digest"
+          echo "${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" > "marker/build-run"
           echo "candidate \`${CANDIDATE}@${DIGEST}\` ($NAME)" >> "$GITHUB_STEP_SUMMARY"
       - name: Upload the digest
         if: env.WRITE_REGISTRY == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: digest-${{ matrix.name }}
-          path: marker/digest
+          path: |
+            marker/digest
+            marker/build-run
           retention-days: 1
       - name: Test in place (fork PR, no candidate)
         if: env.WRITE_REGISTRY != 'true'
@@ -209,6 +212,9 @@ jobs:
           ref="${CANDIDATE}@$(cat marker/digest)"
           docker pull "$ref"
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          # The attempt that BUILT the candidate: a re-run of a failed test
+          # job tests the same candidate under a later run attempt.
+          echo "build_run=$(cat marker/build-run)" >> "$GITHUB_OUTPUT"
       - name: Test stages
         env:
           REF: ${{ steps.pull.outputs.ref }}
@@ -216,7 +222,7 @@ jobs:
           EXPECT_PROFILE: ${{ matrix.profile }}
           EXPECT_OS: ${{ matrix.os }}
           EXPECT_REVISION: ${{ github.sha }}
-          EXPECT_BUILD_RUN: ${{ github.run_id }}-${{ github.run_attempt }}
+          EXPECT_BUILD_RUN: ${{ steps.pull.outputs.build_run }}
         run: test/run.sh "$REF"
       - name: Mark as passed
         run: mkdir -p pass && cp marker/digest pass/digest
@@ -275,9 +281,26 @@ jobs:
           DIGEST: ${{ steps.gate.outputs.digest }}
           TAGS: ${{ matrix.tags }}
         run: |
+          # A -<sha7> tag is an immutable pin: once it points at a digest it
+          # never moves, even when a re-run or dispatch of the same commit
+          # builds a new digest (each image carries its run's label). Only the
+          # rolling tags follow the newest tested digest.
+          sha7="${GITHUB_SHA::7}"
+          set_tags=(); kept=()
+          for t in $TAGS; do
+            if [[ "$t" == *"-${sha7}" ]] && \
+               cur=$(docker buildx imagetools inspect "${IMAGE}:${t}" --format '{{json .Manifest}}' 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["digest"])') && \
+               [ -n "$cur" ] && [ "$cur" != "$DIGEST" ]; then
+              kept+=("$t ($cur)")
+            else
+              set_tags+=("$t")
+            fi
+          done
           args=()
-          for t in $TAGS; do args+=(-t "${IMAGE}:${t}"); done
+          for t in "${set_tags[@]}"; do args+=(-t "${IMAGE}:${t}"); done
           docker buildx imagetools create "${args[@]}" "${CANDIDATE}@${DIGEST}"
+          for k in "${kept[@]}"; do echo "kept immutable pin \`$k\`" >> "$GITHUB_STEP_SUMMARY"; done
+          TAGS="${set_tags[*]}"
           # The copy must be byte-identical: the published digest is the tested one.
           for t in $TAGS; do
             got=$(docker buildx imagetools inspect "${IMAGE}:${t}" --format '{{json .Manifest}}' | python3 -c 'import json,sys; print(json.load(sys.stdin)["digest"])')

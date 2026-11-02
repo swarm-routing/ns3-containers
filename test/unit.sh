@@ -25,7 +25,10 @@ if [ "${UNIT_DEADLINE_SET:-}" != 1 ]; then
     UNIT_DEADLINE_SET=1 timeout "$BUDGET" bash "$0" "$@"
     rc=$?
     if [ "$rc" -eq 124 ] || [ "$rc" -eq 143 ]; then
-        echo "unit: stage did not finish within ${BUDGET} s" >&2
+        echo "unit: stage did not finish within ${BUDGET} s; last output:" >&2
+        for f in /tmp/test.log /tmp/build.log /tmp/configure.log; do
+            [ -s "$f" ] && { echo "--- $f" >&2; tail -20 "$f" >&2; break; }
+        done
     fi
     exit "$rc"
 fi
