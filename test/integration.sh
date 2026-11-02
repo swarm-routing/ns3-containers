@@ -41,6 +41,7 @@ cp /src/test/fixtures/manet-canary/manet-canary.cc scratch/manet-canary/
 echo "integration: built manet-canary and first; budget ${BUDGET} s per run"
 canary=$(compgen -G "$NS3/build/scratch/manet-canary/ns3*-manet-canary*" | head -1)
 first=$(compgen -G "$NS3/build/examples/tutorial/ns3*-first*" | head -1)
+[ -x "$canary" ] || { echo "integration: built manet-canary executable not found" >&2; exit 1; }
 
 expected() {  # expected NAME -> prints the expected outcome, or nothing
     awk -v v="$NS3_VERSION" -v n="$1" '!/^#/ && $1 == v && $2 == n {print $4 " (" $3 ")"}' \
