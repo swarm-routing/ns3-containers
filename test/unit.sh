@@ -11,13 +11,24 @@
 # the throwaway container with the image's own recorded flags and the
 # examples/tests filter set to the modules in test/ns3-suites.txt (`full` on
 # debug and sanitized, `light` on default and optimized), builds their test
-# libraries, and runs `test.py -c unit -f QUICK`. The published image is never
+# libraries, and runs `test.py -c unit -f QUICK`, all within one BUDGET
+# (default 90 min). The published image is never
 # changed. Suites listed for this exact ns-3 version in test/known-failures.txt
 # (`unit:<suite>`) must fail; any other failure fails the stage.
 set -uo pipefail
 
 NS3=${NS3DIR:-/opt/ns-3}
 BUDGET=${BUDGET:-5400}
+# One deadline for the whole stage: configure, build and test.py share it, so
+# a hang anywhere fails the stage instead of stalling the job.
+if [ "${UNIT_DEADLINE_SET:-}" != 1 ]; then
+    UNIT_DEADLINE_SET=1 timeout "$BUDGET" bash "$0" "$@"
+    rc=$?
+    if [ "$rc" -eq 124 ] || [ "$rc" -eq 143 ]; then
+        echo "unit: stage did not finish within ${BUDGET} s" >&2
+    fi
+    exit "$rc"
+fi
 cd "$NS3" || exit 2
 # shellcheck source=/dev/null
 . ./.swarm-configure.env
@@ -41,15 +52,10 @@ start=$(date +%s)
 echo "unit: test libraries built in $(( $(date +%s) - start )) s"
 
 start=$(date +%s)
-timeout "$BUDGET" ./test.py --no-build --nocolor -c unit -f QUICK >/tmp/test.log 2>&1
+./test.py --no-build --nocolor -c unit -f QUICK >/tmp/test.log 2>&1
 rc=$?
 took=$(( $(date +%s) - start ))
 echo "unit: test.py took ${took} s (exit $rc)"
-if [ "$rc" -eq 124 ] || { [ "$rc" -eq 143 ] && [ "$took" -ge "$BUDGET" ]; }; then
-    echo "unit: test.py did not finish within ${BUDGET} s" >&2
-    tail -20 /tmp/test.log >&2
-    exit 1
-fi
 # An empty run (no suite discovered) must not read as a pass.
 summary=$(grep -E '^[0-9]+ of [0-9]+ tests passed' /tmp/test.log | tail -1)
 echo "${summary:-unit: no test.py completion summary}"
