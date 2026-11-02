@@ -288,8 +288,9 @@ jobs:
           TRIVY_USERNAME: ${{ github.actor }}
           TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          docker run --rm -e TRIVY_USERNAME -e TRIVY_PASSWORD -v "$PWD:/out" "$TRIVY" image --quiet \
-            --image-src remote --format cyclonedx --output /out/sbom.cdx.json "${CANDIDATE}@${DIGEST}"
+          # Trivy runs as root: write through stdout so the runner owns the file.
+          docker run --rm -e TRIVY_USERNAME -e TRIVY_PASSWORD "$TRIVY" image --quiet \
+            --image-src remote --format cyclonedx "${CANDIDATE}@${DIGEST}" > sbom.cdx.json
           docker buildx imagetools inspect "${CANDIDATE}@${DIGEST}" --format '{{json .Image}}' > image.json
           python3 - <<'PY'
           import json
@@ -298,7 +299,7 @@ jobs:
               img = next(iter(img.values()))
           ver = img["config"]["Labels"]["org.opencontainers.image.version"]
           bom = json.load(open("sbom.cdx.json"))
-          purl = f"pkg:gitlab/nsnam/ns-3-dev@ns-{ver}"
+          purl = f"pkg:git/gitlab.com/nsnam/ns-3-dev@ns-{ver}"
           bom.setdefault("components", []).append({
               "type": "framework", "bom-ref": purl, "name": "ns-3", "version": ver, "purl": purl,
               "licenses": [{"license": {"id": "GPL-2.0-only"}}],
