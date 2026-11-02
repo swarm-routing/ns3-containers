@@ -16,7 +16,9 @@
 #      the Dockerfile and the script would show up here as a full rebuild.
 #   3. the guard against a module named `core` holds;
 #   4. --strict-warnings judges the module's own code only: the fixture passes,
-#      a planted -Wshadow fails, and the build stays incremental;
+#      a planted -Wshadow fails (in a source, and in its own header reached
+#      through the ns3/ include tree), a dependency left out by
+#      --quality-modules is not judged, and the build stays incremental;
 #   5. --coverage instruments the module: its .gcda files appear after the tests.
 set -euo pipefail
 
@@ -64,6 +66,33 @@ if ns3-build-contrib --strict-warnings "$shadow" > "$log" 2>&1; then
 fi
 grep -q -- '-Werror=shadow' "$log" || { cat "$log"; echo "FAIL: the strict build failed, but not on -Wshadow" >&2; exit 1; }
 echo "smoke: --strict-warnings rejects a planted -Wshadow"
+
+# The same shadow in the module's own header, included as ns3/swarm-hello.h:
+# ns-3's ns3/ tree is -isystem under --strict-warnings, so this proves the
+# module's own headers keep their non-system wrappers.
+hdr="$work/hdr/swarm-hello"
+mkdir -p "$work/hdr" && cp -r "$work/swarm-hello" "$hdr"
+sed -i 's|#include "swarm-hello.h"|#include "ns3/swarm-hello.h"|' "$hdr/model/swarm-hello.cc"
+sed -i 's|^}  // namespace ns3|inline int SwarmHelloShadowH(int x) { int y = x; { int y = 2; x += y; } return x + y; }\n&|' "$hdr/model/swarm-hello.h"
+if ns3-build-contrib --strict-warnings "$hdr" > "$log" 2>&1; then
+    echo "FAIL: --strict-warnings accepted a shadowed local in the module's own header (ns3/ include)" >&2; exit 1
+fi
+grep -q -- '-Werror=shadow' "$log" || { cat "$log"; echo "FAIL: the strict build failed, but not on -Wshadow" >&2; exit 1; }
+echo "smoke: --strict-warnings judges the module's own header through ns3/"
+
+# A dependency built alongside but left out by --quality-modules is not
+# judged: the shadowed header becomes module swarm-dep, the clean fixture the
+# module under test.
+dep="$work/dep/swarm-dep"
+mkdir -p "$work/dep" && cp -r "$hdr" "$dep"
+for f in "$dep"/model/swarm-hello.* "$dep"/test/swarm-hello-test-suite.cc; do mv "$f" "${f//swarm-hello/swarm-dep}"; done
+find "$dep" -type f -exec sed -i 's/swarm-hello/swarm-dep/g; s/SwarmHello/SwarmDep/g; s/SWARM_HELLO/SWARM_DEP/g' {} +
+ns3-build-contrib --strict-warnings --quality-modules swarm-hello "$dep" "$work/swarm-hello" > "$log" 2>&1 || {
+    cat "$log"; echo "FAIL: --quality-modules still judged the dependency" >&2; exit 1; }
+if ns3-build-contrib --quality-modules nope "$work/swarm-hello" > "$log" 2>&1; then
+    echo "FAIL: --quality-modules accepted a module that was not given" >&2; exit 1
+fi
+echo "smoke: --quality-modules leaves a dependency unjudged"
 
 ns3-build-contrib --coverage --test "$work/swarm-hello" > "$log" 2>&1 || {
     cat "$log"; echo "FAIL: --coverage build or tests failed" >&2; exit 1; }

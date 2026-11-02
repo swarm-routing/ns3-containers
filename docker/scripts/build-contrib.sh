@@ -18,6 +18,9 @@
 #                      -Wpedantic -Wshadow ... -Werror; ns-3's headers exempt
 #   --coverage         compile and link the given modules (only) with --coverage
 #                      (gcov); .gcda files land under $NS3DIR/cmake-cache
+#   --quality-modules "a;b"  apply the two options above to these modules only
+#                      (default: every module given), e.g. to leave out a
+#                      dependency built alongside the module under test
 #
 # A module's name is its directory's basename, and must match the `LIBNAME` of
 # its `build_lib()` call (e.g. swarm-core/ -> libns3.49-swarm-core). List
@@ -37,7 +40,7 @@ NS3DIR=${NS3DIR:-/opt/ns-3}
 ENVFILE="$NS3DIR/.swarm-configure.env"
 
 die() { echo "ns3-build-contrib: $*" >&2; exit 2; }
-usage() { sed -n '5,26p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+usage() { sed -n '5,29p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
 
 [ -f "$ENVFILE" ] || die "$ENVFILE missing: not a swarm-routing ns3-dev image?"
 # shellcheck source=/dev/null
@@ -51,6 +54,7 @@ coverage=OFF
 suites=()
 runs=()
 extra_modules=""
+quality_modules=""
 dirs=()
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -60,6 +64,7 @@ while [ $# -gt 0 ]; do
         --run) [ $# -ge 2 ] || die "--run needs a value"; runs+=("$2"); shift ;;
         --strict-warnings) strict=ON ;;
         --coverage) coverage=ON ;;
+        --quality-modules) [ $# -ge 2 ] || die "--quality-modules needs a value"; quality_modules=$2; shift ;;
         -h|--help) usage 0 ;;
         -*) die "unknown option: $1" ;;
         *) dirs+=("$1") ;;
@@ -95,6 +100,14 @@ done
 contrib_list=$(IFS=';'; echo "${names[*]}")
 modules="$NS3_MODULES;$contrib_list"
 [ -n "$extra_modules" ] && modules="$modules;$extra_modules"
+if [ -n "$quality_modules" ]; then
+    IFS=';' read -ra qm <<< "$quality_modules"
+    for q in "${qm[@]}"; do
+        case ";$contrib_list;" in *";$q;"*) ;; *) die "--quality-modules: '$q' is not one of the modules given ($contrib_list)" ;; esac
+    done
+else
+    quality_modules=$contrib_list
+fi
 
 [ -f "$HOOK" ] || die "quality hook $HOOK missing"
 
@@ -106,7 +119,7 @@ cd "$NS3DIR"
 ./ns3 configure -G Ninja $NS3_PROFILE_FLAGS --enable-examples --enable-tests \
     --disable-werror --filter-module-examples-and-tests="$contrib_list" \
     --enable-modules="$modules" \
-    -- -DCMAKE_PROJECT_INCLUDE="$HOOK" -DSWARM_CONTRIB_MODULES="$contrib_list" \
+    -- -DCMAKE_PROJECT_INCLUDE="$HOOK" -DSWARM_CONTRIB_MODULES="$quality_modules" \
     -DSWARM_STRICT_WARNINGS="$strict" -DSWARM_COVERAGE="$coverage"
 start=$(date +%s)
 ./ns3 build
