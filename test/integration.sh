@@ -136,7 +136,20 @@ optional() {  # optional NAME BIN DELIVERY-REGEX ARGS...
 }
 optional first "$first" ""
 optional aodv-example "$aodv_ex" ' [1-9][0-9]* received' --time=10 --size=10
-optional dsdv-manet "$dsdv_ex" "" --totalTime=30 --dataStart=10 --nWifis=20 --nSinks=5
+# dsdv-manet logs delivery with NS_LOG_UNCOND (compiled out in optimized), but
+# its CSV counts received packets in every profile: a wrapper sums that column.
+if [ -n "$dsdv_ex" ]; then
+    cat > /tmp/dsdv-run.sh <<'EOS'
+#!/bin/bash
+"$@" || exit
+awk -F, 'NR > 1 { s += $3 } END { printf "dsdv-received=%d\n", s }' /tmp/dsdv-manet.csv
+EOS
+    chmod +x /tmp/dsdv-run.sh
+    run dsdv-manet 'dsdv-received=[1-9]' /tmp/dsdv-run.sh "$dsdv_ex" \
+        --totalTime=30 --dataStart=10 --nWifis=20 --nSinks=5 --CSVfileName=/tmp/dsdv-manet.csv
+else
+    echo "  SKIP  dsdv-manet: this release has no such example target"
+fi
 # olsr-hna reports delivery with NS_LOG_UNCOND, which the optimized profile
 # compiles out: there it only has to finish.
 if [ "$BUILD_PROFILE" = optimized ]; then
