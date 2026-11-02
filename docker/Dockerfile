@@ -55,8 +55,6 @@ RUN if command -v apt-get >/dev/null; then \
         apk add --no-cache bash ca-certificates git g++ cmake samurai python3 make linux-headers; \
     else echo "unsupported base image" >&2; exit 1; fi
 
-COPY docker/scripts/build-contrib.sh /usr/local/bin/ns3-build-contrib
-
 RUN case "${BUILD_PROFILE}" in \
         default)   flags="-d default" ;; \
         optimized) flags="-d release" ;; \
@@ -74,8 +72,12 @@ RUN case "${BUILD_PROFILE}" in \
         --disable-werror --filter-module-examples-and-tests=core \
         --enable-modules="${NS3_MODULES}" \
  && ./ns3 build \
- && ./ns3 show profile \
- && chmod 755 /usr/local/bin/ns3-build-contrib
+ && ./ns3 show profile
+
+# After the ns-3 build, so editing the script or the hook never invalidates
+# the (long) build layer above.
+COPY --chmod=755 docker/scripts/build-contrib.sh /usr/local/bin/ns3-build-contrib
+COPY --chmod=644 docker/scripts/swarm-quality.cmake /usr/local/share/ns3-build-contrib/swarm-quality.cmake
 
 ENV NS3_VERSION=${NS3_VERSION} \
     BUILD_PROFILE=${BUILD_PROFILE} \

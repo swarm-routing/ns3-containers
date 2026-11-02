@@ -20,12 +20,12 @@ modules into the tree and builds them.
 ```
 docker/Dockerfile                 BASE_IMAGE x NS3_VERSION x BUILD_PROFILE image
 tools/ns3_matrix.py               supported release vs on-demand releases, base digests and tags (+ test_ns3_matrix.py)
-docker/scripts/build-contrib.sh   -> /usr/local/bin/ns3-build-contrib
+docker/scripts/build-contrib.sh   -> /usr/local/bin/ns3-build-contrib (--strict-warnings / --coverage through swarm-quality.cmake, the contrib targets only)
 test/run.sh                       every test stage against one image ref (the candidate digest in CI); `security` runs Trivy (pinned by digest) on the host
 .trivyignore                      accepted Dockerfile findings, each with its reason (the vuln and secret scans take none)
 test/structure.sh                 image contract: tree, tools, env, configure record, CMake cache vs profile, C++ standard
 test/profile.sh                   the profile keeps its promise: asserts/logs on or off, sanitizers catch planted bugs, no AVX
-test/smoke.sh                     image smoke (incremental build + test.py + guards)
+test/smoke.sh                     image smoke (incremental build + test.py + guards; --strict-warnings catches a planted -Wshadow, --coverage instruments the module only)
 test/integration.sh               ns-3 simulates: tutorial `first` + manet-canary AODV/OLSR/DSDV dense/sparse under a wall-clock budget
 test/unit.sh                      ns-3's own QUICK unit suites for the modules in test/ns3-suites.txt (full on debug/sanitized)
 test/ns3-suites.txt               which modules' suites the unit stage runs, per profile group
@@ -101,7 +101,7 @@ Org-wide (1–9), then this repo's own.
    buildx caches scoped per profile; transient artifacts `retention-days` <= 7.
 9. **Nothing shipped depends on `.claude/`.** Skills hold procedures; scripts
    that anything shipped needs live in `tools/` (AntHocNet ADR-0014).
-10. **The configure line is shared.** `docker/Dockerfile` and `build-contrib.sh` must pass identical profile flags, `--enable-examples --enable-tests --disable-werror` and module list (the Dockerfile records them in `/opt/ns-3/.swarm-configure.env`); only the contrib list and the examples/tests filter may differ. Drift forces a full ns-3 rebuild in every downstream job — the smoke's step-count gate catches it.
+10. **The configure line is shared.** `docker/Dockerfile` and `build-contrib.sh` must pass identical profile flags, `--enable-examples --enable-tests --disable-werror` and module list (the Dockerfile records them in `/opt/ns-3/.swarm-configure.env`); only the contrib list, the examples/tests filter and the quality hook's cache variables (`docker/scripts/swarm-quality.cmake`, which changes only the contrib modules' targets) may differ. Drift forces a full ns-3 rebuild in every downstream job — the smoke's step-count gate catches it.
 11. **`optimized` is ns-3's `release` profile, never ns-3's `optimized`** (`-march=native` makes an image SIGILL on another CPU).
 12. **CI consumes `debug`/`sanitized`, never `optimized`.** Asserts catch real bugs (AntHocNet #123).
 13. **Pinned inputs.** The base image by digest; actions by SHA. A published number pins the immutable `:<ver>-<profile>-<sha7>` tag, not the rolling one.
