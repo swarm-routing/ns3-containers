@@ -4,7 +4,7 @@
 #
 # Image smoke test, run inside an ns3-dev image with this repo mounted at /src:
 #
-#   docker run --rm -v "$PWD:/src:ro" ghcr.io/swarm-routing/ns3-dev:3.43-debug \
+#   docker run --rm -v "$PWD:/src:ro" ghcr.io/swarm-routing/ns3-dev:latest-debug \
 #       bash /src/test/smoke.sh
 #
 # Proves the three things downstream repos rely on:
