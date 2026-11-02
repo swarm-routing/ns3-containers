@@ -13,6 +13,7 @@
 | `test/fixtures/` | the test fixtures: an ns-3 contrib module and an ns-3 program | `GPL-2.0-only` |
 | `test/fixtures/swarm-hello/` | the smoke stage's ns-3 contrib module | `GPL-2.0-only` |
 | `test/fixtures/manet-canary/` | the integration stage's MANET program (public ns-3 APIs only) | `GPL-2.0-only` |
+| `test/fixtures/profile-probe/` | the profile stage's probe program (public ns-3 APIs only) | `GPL-2.0-only` |
 | `test/known-failures.txt` | expected upstream failures (data) | `GPL-2.0-only` |
 | `README.md`, `AGENTS.md`, `CLAUDE.md` | docs | `GPL-2.0-only` |
 | the published images | contain ns-3 (GPL-2.0-only) and are distributed as GPL-2.0 | `GPL-2.0-only` |

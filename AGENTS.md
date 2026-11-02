@@ -23,11 +23,13 @@ tools/ns3_matrix.py               supported release vs on-demand releases, base 
 docker/scripts/build-contrib.sh   -> /usr/local/bin/ns3-build-contrib
 test/run.sh                       every test stage against one image ref (the candidate digest in CI)
 test/structure.sh                 image contract: tree, tools, env, configure record, CMake cache vs profile, C++ standard
+test/profile.sh                   the profile keeps its promise: asserts/logs on or off, sanitizers catch planted bugs, no AVX
 test/smoke.sh                     image smoke (incremental build + test.py + guards)
 test/integration.sh               ns-3 simulates: tutorial `first` + manet-canary AODV/OLSR/DSDV dense/sparse under a wall-clock budget
 test/known-failures.txt           upstream bugs expected on one exact ns-3 version (strict XFAIL, shown in the summary)
 test/fixtures/swarm-hello/        minimal contrib module (C++17..C++23) used by the smoke (GPL-2.0-only: an ns-3 module)
 test/fixtures/manet-canary/       short MANET program for the integration stage (GPL-2.0-only)
+test/fixtures/profile-probe/      one deliberate assert/log/memory bug per mode, for the profile stage (GPL-2.0-only)
 .github/workflows/publish-images.yml   resolve -> build once (candidate in ns3-dev-ci) -> test by digest -> promote = retag the same digest (main) -> sign -> attest -> latest-*; weekly new release; `versions` = on demand
 .github/workflows/candidates-cleanup.yml   daily: delete ns3-dev-ci candidates older than 7 days
 .github/workflows/licence.yml     licence headers (tooling MIT OR GPL-2.0-only, rest GPL-2.0-only)

@@ -96,5 +96,6 @@ labels() {
 
 stage labels labels
 stage structure in_image bash /src/test/structure.sh
+stage profile in_image bash /src/test/profile.sh
 stage smoke in_image bash /src/test/smoke.sh
 stage integration in_image bash /src/test/integration.sh
