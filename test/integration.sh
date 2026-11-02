@@ -98,6 +98,9 @@ run() {
     start=$(date +%s)
     out=$(cd /tmp && timeout "$BUDGET" "$@" 2>&1); rc=$?
     took=$(( $(date +%s) - start ))
+    # POST (optional): a command whose output joins the program's, run after it
+    # exits cleanly, so timeout supervises the program itself, never a wrapper.
+    if [ "$rc" -eq 0 ] && [ -n "${POST:-}" ]; then out+=$'\n'$($POST 2>&1); fi
     # GNU timeout exits 124; BusyBox's (Alpine) is killed by SIGTERM, 143.
     if [ "$rc" -eq 124 ] || { [ "$rc" -eq 143 ] && [ "$took" -ge "$BUDGET" ]; }; then
         outcome=timeout
@@ -137,15 +140,12 @@ optional() {  # optional NAME BIN DELIVERY-REGEX ARGS...
 optional first "$first" ""
 optional aodv-example "$aodv_ex" ' [1-9][0-9]* received' --time=10 --size=10
 # dsdv-manet logs delivery with NS_LOG_UNCOND (compiled out in optimized), but
-# its CSV counts received packets in every profile: a wrapper sums that column.
+# its CSV counts received packets in every profile: sum that column afterwards.
+dsdv_received() {
+    awk -F, 'NR > 1 { s += $3 } END { printf "dsdv-received=%d\n", s }' /tmp/dsdv-manet.csv
+}
 if [ -n "$dsdv_ex" ]; then
-    cat > /tmp/dsdv-run.sh <<'EOS'
-#!/bin/bash
-"$@" || exit
-awk -F, 'NR > 1 { s += $3 } END { printf "dsdv-received=%d\n", s }' /tmp/dsdv-manet.csv
-EOS
-    chmod +x /tmp/dsdv-run.sh
-    run dsdv-manet 'dsdv-received=[1-9]' /tmp/dsdv-run.sh "$dsdv_ex" \
+    POST=dsdv_received run dsdv-manet 'dsdv-received=[1-9]' "$dsdv_ex" \
         --totalTime=30 --dataStart=10 --nWifis=20 --nSinks=5 --CSVfileName=/tmp/dsdv-manet.csv
 else
     echo "  SKIP  dsdv-manet: this release has no such example target"
