@@ -90,14 +90,19 @@ fi
 # Every AVX/AVX2/AVX-512 instruction is VEX/EVEX-encoded, which objdump prints
 # with a `v` mnemonic (vmovaps, vpxor, vzeroupper, ...), whatever its
 # registers; the baseline's only v-mnemonics are verr/verw.
+# avx_in DISASSEMBLY -> 1 when it contains a VEX/EVEX mnemonic. Mnemonics may
+# carry underscores (vcmplt_oqps) and braces-free suffixes; verr/verw excluded.
+avx_in() {
+    awk '$1 ~ /^[0-9a-f]+:$/ && $2 ~ /^v[a-z0-9_]+$/ && $2 !~ /^ver[rw]$/ {found = 1; exit}
+         END {exit found ? 1 : 0}' "$1"
+}
 avx_scan() {  # avx_scan LIB -> 0 clean, 1 AVX found, 2 objdump failed
     local dis
     dis=$(mktemp)
     if ! objdump -d --no-show-raw-insn "$1" > "$dis" 2>/dev/null; then rm -f "$dis"; return 2; fi
     # One awk over the file, no pipe: a pipe into an early-exiting grep -q can
     # SIGPIPE objdump/grep and, under pipefail, turn a match into a miss.
-    awk '$1 ~ /^[0-9a-f]+:$/ && $2 ~ /^v[a-z0-9]+$/ && $2 !~ /^ver[rw]$/ {found = 1; exit}
-         END {exit found ? 1 : 0}' "$dis"
+    avx_in "$dis"
     local rc=$?
     rm -f "$dis"
     return "$rc"
@@ -114,6 +119,14 @@ case "$(uname -m)" in
                 1) bad "$(basename "$core") contains AVX/AVX-512 (VEX/EVEX) instructions: built for the build machine's CPU" ;;
                 *) bad "objdump could not disassemble $(basename "$core")" ;;
             esac
+            # Self-check of the matcher on objdump-shaped lines: an underscore
+            # mnemonic is AVX, verr is not.
+            printf '  10:\tvcmplt_oqps %%xmm1,%%xmm2,%%xmm3\n' > /tmp/avx-us.txt
+            printf '  10:\tverr   %%ax\n' > /tmp/avx-verr.txt
+            avx_in /tmp/avx-us.txt; us=$?
+            avx_in /tmp/avx-verr.txt; vr=$?
+            [ "$us" -eq 1 ] && [ "$vr" -eq 0 ] && ok "AVX matcher self-check: vcmplt_oqps flagged, verr not" \
+                || bad "AVX matcher self-check failed (vcmplt_oqps=$us, verr=$vr)"
             # Self-check: the scan must see AVX in a library built with -mavx.
             if printf 'void f(float*a,float*b){for(int i=0;i<64;i++)a[i]+=b[i];}\n' > /tmp/avx.c \
                 && c++ -x c++ -O2 -mavx -fPIC -shared -o /tmp/libavx.so /tmp/avx.c 2>/dev/null; then

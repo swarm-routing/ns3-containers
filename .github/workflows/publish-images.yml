@@ -42,7 +42,9 @@ name: Publish images
 # Cache: buildx registry cache in ghcr.io/<owner>/ns3-dev-cache, one tag per
 # version x os x profile (`mode=max`), outside the 10 GB Actions cache. main
 # and same-repo PRs write it and push candidates; fork PRs only read.
-# Candidates are deleted after 7 days (candidates-cleanup.yml). The only
+# Each clean run deletes its own candidates (the `discard` job, PRs included);
+# candidates-cleanup.yml sweeps leftovers after 7 days and the cache's
+# untagged versions daily. The only
 # workflow artifacts are one-line digest/pass markers, kept 1 day.
 on:
   push:
@@ -140,6 +142,7 @@ jobs:
             NS3_VERSION=${{ matrix.version }}
             BUILD_PROFILE=${{ matrix.profile }}
             REVISION=${{ github.sha }}
+            BUILD_RUN=${{ github.run_id }}-${{ github.run_attempt }}
           tags: ${{ env.WRITE_REGISTRY == 'true' && format('{0}:{1}-{2}-{3}', env.CANDIDATE, github.run_id, github.run_attempt, matrix.name) || format('ns3-dev-local:{0}', matrix.name) }}
           push: ${{ env.WRITE_REGISTRY == 'true' }}
           # A fork PR cannot push: it loads the image and is tested in place.
@@ -154,13 +157,16 @@ jobs:
         run: |
           case "$DIGEST" in sha256:*) ;; *) echo "no digest from the build: '$DIGEST'" >&2; exit 1 ;; esac
           mkdir -p marker && echo "$DIGEST" > "marker/digest"
+          echo "${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" > "marker/build-run"
           echo "candidate \`${CANDIDATE}@${DIGEST}\` ($NAME)" >> "$GITHUB_STEP_SUMMARY"
       - name: Upload the digest
         if: env.WRITE_REGISTRY == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: digest-${{ matrix.name }}
-          path: marker/digest
+          path: |
+            marker/digest
+            marker/build-run
           retention-days: 1
       - name: Test in place (fork PR, no candidate)
         if: env.WRITE_REGISTRY != 'true'
@@ -170,6 +176,7 @@ jobs:
           EXPECT_PROFILE: ${{ matrix.profile }}
           EXPECT_OS: ${{ matrix.os }}
           EXPECT_REVISION: ${{ github.sha }}
+          EXPECT_BUILD_RUN: ${{ github.run_id }}-${{ github.run_attempt }}
         run: test/run.sh "ns3-dev-local:${NAME}"
 
   test:
@@ -205,6 +212,9 @@ jobs:
           ref="${CANDIDATE}@$(cat marker/digest)"
           docker pull "$ref"
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          # The attempt that BUILT the candidate: a re-run of a failed test
+          # job tests the same candidate under a later run attempt.
+          echo "build_run=$(cat marker/build-run)" >> "$GITHUB_OUTPUT"
       - name: Test stages
         env:
           REF: ${{ steps.pull.outputs.ref }}
@@ -212,6 +222,7 @@ jobs:
           EXPECT_PROFILE: ${{ matrix.profile }}
           EXPECT_OS: ${{ matrix.os }}
           EXPECT_REVISION: ${{ github.sha }}
+          EXPECT_BUILD_RUN: ${{ steps.pull.outputs.build_run }}
         run: test/run.sh "$REF"
       - name: Mark as passed
         run: mkdir -p pass && cp marker/digest pass/digest
@@ -270,9 +281,31 @@ jobs:
           DIGEST: ${{ steps.gate.outputs.digest }}
           TAGS: ${{ matrix.tags }}
         run: |
+          # A -<sha7> tag is an immutable pin: once it points at a digest it
+          # never moves, even when a re-run or dispatch of the same commit
+          # builds a new digest (each image carries its run's label). Only the
+          # rolling tags follow the newest tested digest.
+          sha7="${GITHUB_SHA::7}"
+          set_tags=(); kept=()
+          for t in $TAGS; do
+            if [[ "$t" != *"-${sha7}" ]]; then set_tags+=("$t"); continue; fi
+            # Fail closed: only a tag the registry confirms absent is new; any
+            # other lookup error stops promotion rather than move a pin.
+            if out=$(docker buildx imagetools inspect "${IMAGE}:${t}" --format '{{json .Manifest}}' 2>&1); then
+              cur=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["digest"])' <<<"$out")
+              if [ "$cur" = "$DIGEST" ]; then set_tags+=("$t"); else kept+=("$t ($cur)"); fi
+            elif grep -qiE 'not found|manifest unknown' <<<"$out"; then
+              set_tags+=("$t")
+            else
+              echo "$out" >&2
+              echo "::error::cannot tell whether ${IMAGE}:${t} exists; not promoting"; exit 1
+            fi
+          done
           args=()
-          for t in $TAGS; do args+=(-t "${IMAGE}:${t}"); done
+          for t in "${set_tags[@]}"; do args+=(-t "${IMAGE}:${t}"); done
           docker buildx imagetools create "${args[@]}" "${CANDIDATE}@${DIGEST}"
+          for k in "${kept[@]}"; do echo "kept immutable pin \`$k\`" >> "$GITHUB_STEP_SUMMARY"; done
+          TAGS="${set_tags[*]}"
           # The copy must be byte-identical: the published digest is the tested one.
           for t in $TAGS; do
             got=$(docker buildx imagetools inspect "${IMAGE}:${t}" --format '{{json .Manifest}}' | python3 -c 'import json,sys; print(json.load(sys.stdin)["digest"])')
@@ -339,3 +372,69 @@ jobs:
             docker buildx imagetools create "${args[@]}" "${IMAGE}@${digest}"
             echo "$name: ${tags} -> \`${digest}\`" >> "$GITHUB_STEP_SUMMARY"
           done
+
+  discard:
+    name: discard this run's candidates
+    needs: [resolve, test, promote, latest]
+    # Every run, PRs included, deletes the candidates it pushed once nothing
+    # needs them: after a clean run (tests passed and, on main, the tags were
+    # copied). A run with a failure keeps them, so "re-run failed jobs" can
+    # still promote by digest; candidates-cleanup.yml removes those after 7
+    # days. Fork PRs push no candidate.
+    if: >-
+      ${{ !cancelled() && needs.resolve.outputs.count != '0'
+          && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+          && needs.test.result == 'success'
+          && contains(fromJSON('["success","skipped"]'), needs.promote.result)
+          && contains(fromJSON('["success","skipped"]'), needs.latest.result) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: digest-*
+          path: digests
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Delete the candidates and their untagged child manifests
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ORG: ${{ github.repository_owner }}
+        run: |
+          # Each candidate is an index; its image and provenance manifests are
+          # the untagged versions GHCR lists next to it. Delete exactly those
+          # digests: another run's candidates, in test right now, are untouched.
+          : > doomed
+          for f in digests/*/digest; do
+            d=$(cat "$f")
+            echo "$d" >> doomed
+            docker buildx imagetools inspect --raw "${CANDIDATE}@${d}" \
+              | python3 -c 'import json,sys; [print(m["digest"]) for m in json.load(sys.stdin).get("manifests", [])]' >> doomed
+          done
+          base="/orgs/${ORG}/packages/container/ns3-dev-ci/versions"
+          gh api --paginate "${base}?per_page=100" --jq '.[] | "\(.id) \(.name)"' > versions
+          n=0; refused=()
+          while read -r id name; do
+            grep -qxF "$name" doomed || continue
+            if gh api -X DELETE "${base}/${id}" > /dev/null 2>&1; then n=$((n + 1)); else refused+=("$id"); fi
+          done < versions
+          echo "discarded ${n} candidate versions of this run ($(wc -l < doomed) digests)" >> "$GITHUB_STEP_SUMMARY"
+          # GHCR refuses to delete a package's last version, and only that one
+          # may be refused: anything else is a real failure.
+          if [ "${#refused[@]}" -gt 0 ]; then
+            left=$(gh api --paginate "${base}?per_page=100" --jq '.[].id' | wc -l)
+            if [ "${#refused[@]}" -eq 1 ] && [ "$left" -eq 1 ]; then
+              echo "kept version ${refused[0]}: the package's last version (candidates-cleanup takes it later)" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "::error::could not delete candidate versions ${refused[*]} (${left} versions remain)"
+              exit 1
+            fi
+          fi

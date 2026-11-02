@@ -85,8 +85,13 @@ ENV NS3_VERSION=${NS3_VERSION} \
 # The ns3-containers commit that built the image. Declared here, after every
 # build step, so a new commit changes only the image config, not a cached layer.
 ARG REVISION=unknown
+# The pipeline run that built the image: two runs of one commit would otherwise
+# produce byte-identical candidates from the cache, and one run's cleanup
+# could delete what the other is still testing (ns3-containers#52).
+ARG BUILD_RUN=local
 LABEL org.opencontainers.image.source="https://github.com/swarm-routing/ns3-containers" \
       org.opencontainers.image.revision="${REVISION}" \
+      io.github.swarm-routing.build-run="${BUILD_RUN}" \
       org.opencontainers.image.version="${NS3_VERSION}" \
       io.github.swarm-routing.ns3.profile="${BUILD_PROFILE}" \
       io.github.swarm-routing.ns3.base="${BASE_OS}" \

@@ -2,11 +2,15 @@
 # SPDX-License-Identifier: MIT OR GPL-2.0-only
 name: Candidates cleanup
 
-# publish-images.yml pushes every image it builds to the candidate package
-# ns3-dev-ci, tests it there by digest, and promotes it into ns3-dev by a
-# carbon copy (ns3-containers#37). Nobody consumes ns3-dev-ci, so its versions
-# are deleted after 7 days. ns3-dev is a separate package: deleting a
-# candidate never touches a published image.
+# Two packages hold nothing anyone pulls:
+#   ns3-dev-ci     publish-images.yml's candidates. Each run deletes its own
+#                  once it is clean (its `discard` job); this sweeps whatever a
+#                  failed or cancelled run left, after 7 days.
+#   ns3-dev-cache  the buildx registry cache. Writing a cache tag leaves the
+#                  previous cache manifest untagged and unused; untagged
+#                  versions older than a day are deleted.
+# The published package, ns3-dev, is never touched: its untagged versions are
+# the child and attestation manifests of tagged images (ns3-containers#36).
 on:
   schedule:
     - cron: '41 4 * * *'   # daily 04:41 UTC
@@ -22,7 +26,7 @@ jobs:
     permissions:
       packages: write
     steps:
-      - name: Delete candidate versions older than 7 days
+      - name: Delete ns3-dev-ci candidates older than 7 days
         env:
           GH_TOKEN: ${{ github.token }}
           ORG: ${{ github.repository_owner }}
@@ -47,4 +51,23 @@ jobs:
             if gh api -X DELETE "${base}/${id}" >/dev/null; then n=$((n + 1)); else failed=$((failed + 1)); fi
           done
           echo "deleted ${n} candidate versions created before ${cutoff}; ${failed} failed" >> "$GITHUB_STEP_SUMMARY"
+          [ "$failed" -eq 0 ]
+      - name: Delete untagged ns3-dev-cache versions older than a day
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ORG: ${{ github.repository_owner }}
+        run: |
+          base="/orgs/${ORG}/packages/container/ns3-dev-cache/versions"
+          cutoff=$(date -u -d '1 day ago' +%Y-%m-%dT%H:%M:%SZ)
+          err="${RUNNER_TEMP}/gh-err-cache"
+          if ! ids=$(gh api --paginate "${base}?per_page=100" \
+                       --jq ".[] | select((.metadata.container.tags | length) == 0 and .created_at < \"${cutoff}\") | .id" 2>"$err"); then
+            if grep -q 'HTTP 404' "$err"; then echo "no ns3-dev-cache package"; exit 0; fi
+            cat "$err" >&2; exit 1
+          fi
+          n=0; failed=0
+          for id in $ids; do
+            if gh api -X DELETE "${base}/${id}" >/dev/null; then n=$((n + 1)); else failed=$((failed + 1)); fi
+          done
+          echo "deleted ${n} untagged cache versions created before ${cutoff}; ${failed} failed" >> "$GITHUB_STEP_SUMMARY"
           [ "$failed" -eq 0 ]

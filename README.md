@@ -123,9 +123,25 @@ passes its matrix entry and commit):
 | `profile` | the profile does what its name says: asserts abort and `NS_LOG` prints (`default`, `debug`, `sanitized`) or both are compiled out (`optimized`); on `sanitized`, a planted use-after-free, leak and signed overflow are each reported by ASan, LSan and UBSan; no AVX/AVX-512 instruction in the stock core library (nothing built for the build machine's CPU) |
 | `smoke` | builds `test/fixtures/swarm-hello`, runs its test.py suite, fails above 40 Ninja steps (the warm cache was missed) |
 
-| `integration` | ns-3 actually simulates: the tutorial `first`, and [`manet-canary`](test/fixtures/manet-canary/) (16 nodes, random waypoint) with AODV, OLSR and DSDV, dense (must deliver) and sparse (partitioned), each under a wall-clock budget: a run that does not finish is a hang |
+| `integration` | ns-3 actually simulates: the tutorial `first`; the routing modules' own examples `aodv-example` (must deliver), `dsdv-manet` and `olsr-hna` (must deliver); and [`manet-canary`](test/fixtures/manet-canary/) (16 nodes, random waypoint) with AODV, OLSR and DSDV, dense (must deliver) and sparse (partitioned), each under a wall-clock budget: a run that does not finish is a hang |
 
 | `unit` | ns-3's own QUICK unit suites (`test.py -c unit -f QUICK`) for the modules in [`test/ns3-suites.txt`](test/ns3-suites.txt): the MANET stack (core, network, internet, mobility, wifi, propagation, aodv, olsr, dsdv, mesh) on `debug` and `sanitized`, core/network/internet on `default` and `optimized`; their test libraries are built in the throwaway container |
+
+Unit-stage cost per image (ns-3.49, GitHub-hosted runner, measured in #51's run):
+
+| Image | Group | Suites | Test-library build | test.py |
+|---|---|---|---|---|
+| `3.49-debug` | full | 213 | 365 s | 486 s |
+| `3.49-sanitized` | full | 213 | 646 s | 2631 s |
+| `3.49-debian-debug` | full | 213 | 497 s | 636 s |
+| `3.49-slim-debug` | full | 213 | 504 s | 619 s |
+| `3.49-alpine-debug` | full | 213 | 749 s | 811 s |
+| `3.49` (default) | light | 134 | 167 s | 51 s |
+| `3.49-optimized` | light | 134 | 203 s | 32 s |
+| `3.49-debian` | light | 134 | 257 s | 90 s |
+| `3.49-slim` | light | 134 | 251 s | 90 s |
+
+The sanitized image's unit stage (~55 min) sets the length of a pipeline run.
 
 [`test/known-failures.txt`](test/known-failures.txt) lists upstream ns-3 bugs
 expected on one exact ns-3 version; each shows in the step summary as XFAIL,
@@ -138,7 +154,7 @@ downstream canary.
 **What is tested is what is published.**
 [`publish-images.yml`](.github/workflows/publish-images.yml) builds each image
 **once** and pushes it to the candidate package `ghcr.io/swarm-routing/ns3-dev-ci`
-(not for consumers; deleted after 7 days). The tests run on that candidate
+(not for consumers; each clean run, PRs included, deletes its own, and a daily job sweeps leftovers and the cache's untagged versions). The tests run on that candidate
 **by digest**. Only an image whose tests passed gets its `ns3-dev` tags, as a
 byte-identical copy of the tested digest (no rebuild), then a keyless cosign
 signature and a provenance attestation. The `latest-*` tags move last, and
@@ -149,6 +165,6 @@ releases go through the same tests. The buildx cache lives in
 ## Licence
 
 Per directory, as AntHocNet ([LICENSING.md](LICENSING.md)): the image tooling
-(`docker/`, `test/smoke.sh`, the workflows) is `MIT OR GPL-2.0-only`; the ns-3
+(`docker/`, the `test/*.sh` stage scripts, `tools/`, the workflows) is `MIT OR GPL-2.0-only`; the ns-3
 fixture module and everything else is `GPL-2.0-only`. The published images
 contain ns-3 and are distributed under GPL-2.0.

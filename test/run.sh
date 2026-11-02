@@ -13,8 +13,8 @@
 # with this repository mounted read-only at /src, so no stage sees another's
 # changes and the image itself is never modified.
 #
-# EXPECT_VERSION, EXPECT_PROFILE, EXPECT_OS (the pipeline's matrix entry) and
-# EXPECT_REVISION (the commit that built it)
+# EXPECT_VERSION, EXPECT_PROFILE, EXPECT_OS (the pipeline's matrix entry),
+# EXPECT_REVISION (the commit that built it) and EXPECT_BUILD_RUN (the run)
 # are passed to the stages that compare against them; unset, those
 # comparisons are skipped and say so.
 #
@@ -73,7 +73,8 @@ labels() {
                 "org.opencontainers.image.version=${EXPECT_VERSION:-}" \
                 "io.github.swarm-routing.ns3.profile=${EXPECT_PROFILE:-}" \
                 "io.github.swarm-routing.ns3.base=${EXPECT_OS:-}" \
-                "org.opencontainers.image.revision=${EXPECT_REVISION:-}"; do
+                "org.opencontainers.image.revision=${EXPECT_REVISION:-}" \
+                "io.github.swarm-routing.build-run=${EXPECT_BUILD_RUN:-}"; do
         key=${pair%%=*}; want=${pair#*=}
         got=$(docker image inspect --format "{{ index .Config.Labels \"$key\" }}" "$image")
         if [ -z "$want" ]; then
