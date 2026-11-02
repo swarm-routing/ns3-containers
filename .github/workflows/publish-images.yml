@@ -72,7 +72,7 @@ env:
   IMAGE: ghcr.io/${{ github.repository_owner }}/ns3-dev
   CANDIDATE: ghcr.io/${{ github.repository_owner }}/ns3-dev-ci
   # Same pin as test/run.sh's security stage.
-  TRIVY: ghcr.io/aquasecurity/trivy:0.76.0@sha256:2416d1f74045b57274df1a340eee6b510cacd73c66a6ccb8da092b117eb7d222
+  TRIVY: ghcr.io/aquasecurity/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
   CACHE: ghcr.io/${{ github.repository_owner }}/ns3-dev-cache
   PUSH: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
   # Same-repo PRs and main may write the registry (cache, candidates); fork PRs cannot.
@@ -278,6 +278,37 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # The image's inventory (#38), generated from the tested candidate digest
+      # before any tag is created, so a failure here publishes nothing. ns-3
+      # is built from source (no package record for Trivy to find), so it is
+      # added as its own component, versioned from the image label.
+      - name: SBOM (CycloneDX, Trivy pinned by digest)
+        env:
+          DIGEST: ${{ steps.gate.outputs.digest }}
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          docker run --rm -e TRIVY_USERNAME -e TRIVY_PASSWORD -v "$PWD:/out" "$TRIVY" image --quiet \
+            --image-src remote --format cyclonedx --output /out/sbom.cdx.json "${CANDIDATE}@${DIGEST}"
+          docker buildx imagetools inspect "${CANDIDATE}@${DIGEST}" --format '{{json .Image}}' > image.json
+          python3 - <<'PY'
+          import json
+          img = json.load(open("image.json"))
+          if "config" not in img:  # an index: one config per platform, same labels
+              img = next(iter(img.values()))
+          ver = img["config"]["Labels"]["org.opencontainers.image.version"]
+          bom = json.load(open("sbom.cdx.json"))
+          purl = f"pkg:gitlab/nsnam/ns-3-dev@ns-{ver}"
+          bom.setdefault("components", []).append({
+              "type": "framework", "bom-ref": purl, "name": "ns-3", "version": ver, "purl": purl,
+              "licenses": [{"license": {"id": "GPL-2.0-only"}}],
+              "externalReferences": [{"type": "vcs", "url": "https://gitlab.com/nsnam/ns-3-dev"}],
+              "properties": [{"name": "swarm-routing:path", "value": "/opt/ns-3"}],
+          })
+          json.dump(bom, open("sbom.cdx.json", "w"), indent=1)
+          print(f"SBOM: {len(bom['components'])} components (ns-3 {ver} included)")
+          PY
+          echo "SBOM: $(python3 -c 'import json; print(len(json.load(open("sbom.cdx.json"))["components"]))') components, ns-3 included" >> "$GITHUB_STEP_SUMMARY"
       - name: Tag the tested digest (carbon copy, no rebuild)
         env:
           DIGEST: ${{ steps.gate.outputs.digest }}
@@ -326,14 +357,6 @@ jobs:
           subject-name: ${{ env.IMAGE }}
           subject-digest: ${{ steps.gate.outputs.digest }}
           push-to-registry: true
-      # The image's package inventory, attested on the same digest (#38).
-      - name: SBOM (CycloneDX, Trivy pinned by digest)
-        env:
-          DIGEST: ${{ steps.gate.outputs.digest }}
-        run: |
-          docker run --rm -v "$PWD:/out" "$TRIVY" image --quiet --image-src remote \
-            --format cyclonedx --output /out/sbom.cdx.json "${IMAGE}@${DIGEST}"
-          echo "SBOM: $(python3 -c 'import json; print(len(json.load(open("sbom.cdx.json")).get("components", [])))') components" >> "$GITHUB_STEP_SUMMARY"
       - name: Attest SBOM
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:

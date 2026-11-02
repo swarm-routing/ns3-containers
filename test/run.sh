@@ -90,10 +90,10 @@ labels() {
 
 # Security (ns3-containers#38, #30), on the host with a digest-pinned Trivy.
 # Gates: fixable vulnerabilities of MEDIUM or higher (the maintainer's
-# threshold), any secret in the image, HIGH+ Dockerfile misconfigurations
+# threshold), any secret in the image (files, and ENV/history in its config), HIGH+ Dockerfile misconfigurations
 # except the ones accepted with a reason in .trivyignore. Behind a
 # TLS-intercepting proxy set TRIVY_CA to its CA bundle.
-TRIVY=ghcr.io/aquasecurity/trivy:0.76.0@sha256:2416d1f74045b57274df1a340eee6b510cacd73c66a6ccb8da092b117eb7d222
+TRIVY=ghcr.io/aquasecurity/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
 trivy() {
     local cache=${TRIVY_CACHE:-${RUNNER_TEMP:-/tmp}/trivy-cache} extra=()
     mkdir -p "$cache"
@@ -112,7 +112,7 @@ security() {
         echo "  FAIL  fixable vulnerabilities above (rebuild with refreshed packages, #27)" >&2; fails=$((fails + 1))
     fi
     echo "security: secrets"
-    if trivy image --quiet --scanners secret --exit-code 1 --format table "$image"; then
+    if trivy image --quiet --scanners secret --image-config-scanners secret --exit-code 1 --format table "$image"; then
         echo "  ok    no secret in the image"
     else
         echo "  FAIL  secrets found in the image" >&2; fails=$((fails + 1))
