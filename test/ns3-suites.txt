@@ -1,0 +1,10 @@
+# Modules whose QUICK unit suites test/unit.sh builds and runs (ns3-containers#40).
+#
+#   <group> <module> ...
+#
+# `full` runs on the debug and sanitized images (what CI consumes; asserts on),
+# `light` on default and optimized. The MANET stack the org's protocols use is
+# in `full`: core, network, internet, mobility, wifi, propagation, the routing
+# models (aodv, olsr, dsdv) and mesh (in NS3_MODULES).
+full  core network internet mobility wifi propagation aodv olsr dsdv mesh
+light core network internet

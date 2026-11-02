@@ -125,13 +125,15 @@ passes its matrix entry and commit):
 
 | `integration` | ns-3 actually simulates: the tutorial `first`, and [`manet-canary`](test/fixtures/manet-canary/) (16 nodes, random waypoint) with AODV, OLSR and DSDV, dense (must deliver) and sparse (partitioned), each under a wall-clock budget: a run that does not finish is a hang |
 
+| `unit` | ns-3's own QUICK unit suites (`test.py -c unit -f QUICK`) for the modules in [`test/ns3-suites.txt`](test/ns3-suites.txt): the MANET stack (core, network, internet, mobility, wifi, propagation, aodv, olsr, dsdv, mesh) on `debug` and `sanitized`, core/network/internet on `default` and `optimized`; their test libraries are built in the throwaway container |
+
 [`test/known-failures.txt`](test/known-failures.txt) lists upstream ns-3 bugs
 expected on one exact ns-3 version; each shows in the step summary as XFAIL,
 and an expected failure that passes fails the stage. Today:
 **ns-3.49's stock AODV hangs in the sparse run** (#35).
 
-More stages are coming (#36): security, ns-3's own unit suites,
-fixed-seed regression and a downstream canary.
+More stages are coming (#36): security, fixed-seed regression and a
+downstream canary.
 
 **What is tested is what is published.**
 [`publish-images.yml`](.github/workflows/publish-images.yml) builds each image
