@@ -54,7 +54,8 @@ run() {
     start=$(date +%s)
     out=$(cd /tmp && timeout "$BUDGET" "$@" 2>&1); rc=$?
     took=$(( $(date +%s) - start ))
-    if [ "$rc" -eq 124 ]; then
+    # GNU timeout exits 124; BusyBox's (Alpine) is killed by SIGTERM, 143.
+    if [ "$rc" -eq 124 ] || { [ "$rc" -eq 143 ] && [ "$took" -ge "$BUDGET" ]; }; then
         outcome=timeout
     elif [ "$rc" -ne 0 ]; then
         outcome="exit $rc"
