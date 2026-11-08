@@ -221,15 +221,15 @@ Corrections that came out of the tests:
 
 What is planned and in progress here: the issues labelled [`epic`](https://github.com/swarm-routing/ns3-containers/issues?q=label%3Aepic). An epic's open sub-issues carry a `priority:*` and a `model:*` label, so a contributor or an AI agent can pick one up ([how issues work](https://github.com/swarm-routing/.github/blob/main/CONTRIBUTING.md#issues)). The whole org's plan: the [roadmap](https://github.com/swarm-routing/.github/blob/main/ROADMAP.md#epics).
 
-| Epic | Status | Sub-issues done |
-|------|--------|-----------------|
+| Epic | Status | Sub-issues closed |
+|------|--------|-------------------|
 | [#19](https://github.com/swarm-routing/ns3-containers/issues/19) OS and compiler coverage — the platforms ns-3 supports and researchers use | In progress | 2 / 6 |
 | [#36](https://github.com/swarm-routing/ns3-containers/issues/36) image test pipeline — every image built is tested by digest (security, structure, unit, profile, integration, regression, downstream) before any tag moves | In progress | 5 / 9 |
 | [#11](https://github.com/swarm-routing/ns3-containers/issues/11) multi-platform ns3-dev images (linux/amd64 + linux/arm64) with docker buildx | Planned | no sub-issues yet |
 | [#12](https://github.com/swarm-routing/ns3-containers/issues/12) developer documentation for the ns3-dev images (usage, per-image pages, debugging, CI/CD) kept current by AI review | Planned | 0 / 7 |
 | [#27](https://github.com/swarm-routing/ns3-containers/issues/27) security refresh — keep the latest 3 ns-3 versions' images patched (scheduled base refresh + scan-triggered rebuilds) | Planned | 0 / 4 |
 
-<details><summary>Done: 1 epic</summary>
+<details><summary>Closed: 1 epic</summary>
 
 | Epic | Closed |
 |------|--------|
