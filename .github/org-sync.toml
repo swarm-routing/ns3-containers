@@ -1,0 +1,31 @@
+# org-sync configuration (swarm-routing/.github tools/org-sync).
+kind = "container"
+title = "ns3-containers"
+dual = ["docker/", "test/smoke.sh", "test/run.sh", "test/structure.sh", "test/integration.sh", "test/profile.sh", "test/unit.sh", "tools/", ".github/"]
+ci_workflow = "publish-images.yml"
+posture = "the org's ns-3 development images (`ghcr.io/swarm-routing/ns3-dev`), used by every repository's CI"
+trust_boundary = """
+The build inputs: base images pinned by digest, actions pinned by commit SHA,
+and the ns-3 source fetched from upstream's release tag. Images are published
+only from `main`; a pull request's candidate goes to `ns3-dev-ci` and is
+deleted after its run."""
+limitations = """
+- The images run as root: they are development and CI images (Trivy DS-0002 is
+  accepted in `.trivyignore`).
+- ns-3 is research software and is not hardened.
+- Older ns-3 releases, built on demand, get no OS security refresh.
+- The Alpine base is experimental.
+- Known findings: the README's "Known issues and findings", #35 and #49."""
+verifying = """
+```bash
+cosign verify \\
+  --certificate-identity https://github.com/swarm-routing/ns3-containers/.github/workflows/publish-images.yml@refs/heads/main \\
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \\
+  ghcr.io/swarm-routing/ns3-dev:<tag>
+gh attestation verify oci://ghcr.io/swarm-routing/ns3-dev:<tag> --owner swarm-routing
+```
+
+The attestation is the build provenance (an SBOM follows with #38). For a
+published number, pin an immutable `-<sha7>` tag or a digest, never a
+rolling tag."""
+licence_badge = "MIT OR GPL-2.0-only tooling"
