@@ -1,5 +1,13 @@
 # ns3-containers
 
+<!-- org-sync:begin badges -->
+[![CI](https://github.com/swarm-routing/ns3-containers/actions/workflows/publish-images.yml/badge.svg)](https://github.com/swarm-routing/ns3-containers/actions/workflows/publish-images.yml)
+[![Licence: MIT OR GPL-2.0-only tooling](https://img.shields.io/badge/licence-MIT%20OR%20GPL--2.0--only%20tooling-blue)](LICENSING.md)
+[![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-yellow)](https://www.conventionalcommits.org)
+[![GHCR: ns3-dev](https://img.shields.io/badge/ghcr.io-swarm--routing%2Fns3--dev-blue?logo=docker)](https://github.com/orgs/swarm-routing/packages/container/package/ns3-dev)
+[![Images signed: cosign](https://img.shields.io/badge/images%20signed-cosign-success)](SECURITY.md#verifying-what-it-ships)
+<!-- org-sync:end badges -->
+
 Pre-built **ns-3** images for `swarm-routing` contrib modules:
 `ghcr.io/swarm-routing/ns3-dev` (public, no login needed). The ns-3 tree at
 `/opt/ns-3` is already configured and built (Ninja), so a downstream module
