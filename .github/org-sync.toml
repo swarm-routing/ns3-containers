@@ -1,7 +1,7 @@
 # org-sync configuration (swarm-routing/.github tools/org-sync).
 kind = "container"
 title = "ns3-containers"
-dual = ["docker/", "test/smoke.sh", "test/run.sh", "test/structure.sh", "test/integration.sh", "test/profile.sh", "test/unit.sh", "tools/", ".github/"]
+dual = ["docker/", "test/smoke.sh", "test/run.sh", "test/structure.sh", "test/integration.sh", "test/profile.sh", "test/unit.sh", "tools/", ".github/workflows/"]
 ci_workflow = "publish-images.yml"
 posture = "the org's ns-3 development images (`ghcr.io/swarm-routing/ns3-dev`), used by every repository's CI"
 trust_boundary = """
@@ -25,7 +25,16 @@ cosign verify \\
 gh attestation verify oci://ghcr.io/swarm-routing/ns3-dev:<tag> --owner swarm-routing
 ```
 
-The attestation is the build provenance (an SBOM follows with #38). For a
+The first check is the signature; the second, the build provenance. The
+CycloneDX SBOM is attested the same way: add
+`--predicate-type https://cyclonedx.org/bom`. For a
 published number, pin an immutable `-<sha7>` tag or a digest, never a
 rolling tag."""
 licence_badge = "MIT OR GPL-2.0-only tooling"
+image = "ns3-dev"
+dockerfile = "docker/Dockerfile"
+[make]
+test = """
+python3 -m unittest discover -s tools
+$(MAKE) build
+test/run.sh local/$(notdir $(CURDIR)):dev"""

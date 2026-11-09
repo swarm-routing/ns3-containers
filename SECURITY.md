@@ -44,6 +44,8 @@ cosign verify \
 gh attestation verify oci://ghcr.io/swarm-routing/ns3-dev:<tag> --owner swarm-routing
 ```
 
-The attestation is the build provenance (an SBOM follows with #38). For a
+The first check is the signature; the second, the build provenance. The
+CycloneDX SBOM is attested the same way: add
+`--predicate-type https://cyclonedx.org/bom`. For a
 published number, pin an immutable `-<sha7>` tag or a digest, never a
 rolling tag.
