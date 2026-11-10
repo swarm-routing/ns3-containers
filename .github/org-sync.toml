@@ -45,7 +45,7 @@ description = "Pre-built, tested ns-3 images for contrib-module CI: ghcr.io/swar
 homepage = "https://swarm-routing.github.io/arena/ns3-containers/"
 topics = ["ns-3", "docker", "container-images", "ghcr", "ci", "sanitizers", "network-simulation", "reproducibility", "cosign"]
 ruleset = "tooling"
-# Not the image pipeline's build/test jobs: publish-images.yml runs only on docker/**, test/**,
-# tools/** changes, and a required check that does not run blocks the PR. They need an
-# always-running gate job first. The PR-title check is added once this repository runs it (swarm-routing/.github#117).
-required_checks = ["check / org-sync", "headers / licence"]
+# The image pipeline is required through its always-running `images gate` job (#80), not its
+# build/test jobs: those run only on docker/**, test/**, tools/** changes, and a required
+# check that does not run blocks the PR.
+required_checks = ["check / org-sync", "headers / licence", "images gate", "title / title"]
