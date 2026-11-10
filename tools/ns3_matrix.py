@@ -49,7 +49,9 @@ a `base` part (every stage but unit) and the unit stage as one part (N = 1)
 or N shards (`test/run.sh --stages unit --unit-shard i/N`). promote tags the
 digest only when every part passed. `--check-suites` validates
 test/ns3-suites.txt: for N >= 2, the split profile's group has shards 1..N
-that list its modules exactly once.
+that list its modules exactly once; a `main-only` line (suites test/unit.sh
+leaves out on pull requests, #86) names at least one suite and is not a
+group.
 
 --tier latest keeps only the supported release's entries (its full set, the
 images the automatic pipelines own). It is what an OS security refresh
@@ -178,6 +180,8 @@ def read_suites(path=SUITES):
             elif w[0] == "shard":
                 i, n = (int(x) for x in w[2].split("/"))
                 shards.setdefault((w[1], n), {})[i] = w[3:]
+            elif w[0] == "main-only":
+                continue  # suites deferred to main on PRs (test/unit.sh), not a group
             else:
                 groups[w[0]] = w[1:]
     return groups, splits, shards
@@ -187,6 +191,9 @@ def check_suites(path=SUITES):
     """Problems in test/ns3-suites.txt, as strings (empty: valid)."""
     groups, splits, shards = read_suites(path)
     errs = []
+    with open(path) as f:
+        if any(raw.split("#", 1)[0].split() == ["main-only"] for raw in f):
+            errs.append("a main-only line names no suite")
     for profile, n in sorted(splits.items()):
         g = PROFILE_GROUP.get(profile)
         if g not in groups:

@@ -71,6 +71,11 @@ with SIGILL on another CPU.
 CI that should track ns-3 uses `latest-debug` / `latest-sanitized`; anything
 that produces a published number pins a versioned `-<sha7>` tag.
 
+CI tools: the `debug` and `sanitized` images carry `gcovr` (pinned, see
+`--coverage` below); `debug` also carries `unzip`, `curl` and `gnupg`, which
+the org's `reusable-ns3-ci.yml` SonarQube step uses to fetch and verify the
+scanner (#88). Both steps install them by apt only when they are missing.
+
 Toolchains: Ubuntu 24.04 gcc-13 / CMake 3.28; Debian 13 gcc-14 / CMake 3.31;
 each tree builds in its own C++ standard (ns-3's `CMAKE_CXX_STANDARD_MINIMUM`:
 C++17 for 3.40, C++20 for 3.41–3.45, C++23 from 3.46; the structure test reads
@@ -167,7 +172,7 @@ passes its matrix entry and commit):
 | Stage | Checks |
 |---|---|
 | `labels` | the OCI labels: source, licence, ns-3 version, profile, base, revision |
-| `structure` | `/opt/ns-3` configured and built, `ns3-build-contrib` on `PATH`, the environment, the recorded configure line and module list (equal to the Dockerfile's, every module built), the CMake cache matching the profile (build type, asserts, logs, sanitizers, no native optimizations, examples and tests on), the C++ standard the tree requires, `gcovr` at its pinned version on `debug` and `sanitized` |
+| `structure` | `/opt/ns-3` configured and built, `ns3-build-contrib` on `PATH`, the environment, the recorded configure line and module list (equal to the Dockerfile's, every module built), the CMake cache matching the profile (build type, asserts, logs, sanitizers, no native optimizations, examples and tests on), the C++ standard the tree requires, `gcovr` at its pinned version on `debug` and `sanitized`, `unzip`, `curl` and `gpg` on `debug` |
 | `profile` | the profile does what its name says: asserts abort and `NS_LOG` prints (`default`, `debug`, `sanitized`) or both are compiled out (`optimized`); on `sanitized`, a planted use-after-free, leak and signed overflow are each reported by ASan, LSan and UBSan; no AVX/AVX-512 instruction in the stock core library (nothing built for the build machine's CPU) |
 | `smoke` | builds `test/fixtures/swarm-hello`, runs its test.py suite, fails above 40 Ninja steps (the warm cache was missed); `--strict-warnings`, `--quality-modules` and `--coverage` do what they promise, and the image's `gcovr` reports the module's coverage |
 
@@ -223,6 +228,18 @@ and sanitized image), before the digest is promoted. The workflow sets
 `tools/ns3_matrix.py`); `test/run.sh` without it runs the profile's group,
 as a local run, a schedule or a dispatch does.
 The step summary says which set ran and why.
+
+**Some suites run on `main` only (#86, maintainer decision (c)).** On a pull
+request (`UNIT_PR=1`, set by the workflow) every image's unit stage leaves
+out the suites on the `main-only` line of
+[`test/ns3-suites.txt`](test/ns3-suites.txt), whatever its group. Today that
+is `ns3-tcp-cubic` (internet, so in both groups): one upstream suite that
+took 1343–1936 s under ASan+UBSan, 470 s on `debug` and 348 of the 350 s of
+`test.py` on the light Debian images, and so set both the sanitized job's
+wall time and most of a PR run's runner minutes. The job log and the step
+summary name each deferred suite (a SKIP note). Pushes to `main`, schedule
+and dispatch runs, and any run without `UNIT_PR`, run it; promotion happens
+only on `main`, so every published image is still tested with it.
 
 [`test/known-failures.txt`](test/known-failures.txt) lists upstream ns-3 bugs
 expected on one exact ns-3 version; each shows in the step summary as XFAIL,

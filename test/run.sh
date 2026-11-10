@@ -32,6 +32,11 @@
 # profile picks it (test/unit.sh). The pipeline sets it to `light` only on a
 # pull request, for the Debian, slim and Alpine images (ns3-containers#87).
 #
+# UNIT_PR=1 (set by the pipeline on a pull request only) makes the unit stage
+# leave out the suites on test/ns3-suites.txt's `main-only` line and say so;
+# unset, they run. Promotion happens only on main, where they always run, so
+# every published image is tested with them (ns3-containers#86, #87).
+#
 # The same stages run for every image the pipeline builds: the supported
 # release and on-demand older releases alike (ns3-containers#36). A stage that
 # cannot apply to a release says SKIP (<reason>); it never passes silently.
@@ -105,7 +110,7 @@ stage() {
 in_image() {
     docker run --rm -v "$repo:/src:ro" \
         -e EXPECT_VERSION="${EXPECT_VERSION:-}" -e EXPECT_PROFILE="${EXPECT_PROFILE:-}" \
-        -e EXPECT_OS="${EXPECT_OS:-}" -e UNIT_SET="${UNIT_SET:-}" -e UNIT_SHARD="$unit_shard" \
+        -e EXPECT_OS="${EXPECT_OS:-}" -e UNIT_SET="${UNIT_SET:-}" -e UNIT_SHARD="$unit_shard" -e UNIT_PR="${UNIT_PR:-}" \
         "$image" "$@"
 }
 

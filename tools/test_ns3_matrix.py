@@ -200,6 +200,20 @@ class UnitShards(unittest.TestCase):
         errs = suites(GROUPS + "shard full 1/2 wifi\nshard full 2/2 core network aodv\n")
         self.assertTrue(any("no split line uses" in e for e in errs), errs)
 
+    def test_main_only_is_not_a_group(self):
+        text = GROUPS + "main-only ns3-tcp-cubic\nsplit sanitized 2\nshard full 1/2 wifi\nshard full 2/2 core network aodv\n"
+        self.assertEqual(suites(text), [])
+        with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as f:
+            f.write(text)
+        try:
+            self.assertNotIn("main-only", m.read_suites(f.name)[0])
+        finally:
+            os.unlink(f.name)
+
+    def test_empty_main_only_fails(self):
+        errs = suites(GROUPS + "main-only\n")
+        self.assertTrue(any("main-only line names no suite" in e for e in errs), errs)
+
     def test_parts(self):
         self.assertEqual(m.test_parts("debug", {"sanitized": 3}),
                          [{"part": "all", "stages": "", "unit_shard": ""}])
