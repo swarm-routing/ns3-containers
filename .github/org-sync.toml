@@ -41,7 +41,7 @@ test/run.sh local/$(notdir $(CURDIR)):dev"""
 
 [settings]
 # GitHub settings as code: swarm-routing/.github tools/repo-settings (swarm-routing/.github#117).
-description = "Pre-built, tested ns-3 images for contrib-module CI: ghcr.io/swarm-routing/ns3-dev with the ns-3 tree configured and built, in debug, sanitized, default and optimized profiles on Ubuntu, Debian and Alpine, signed and attested."
+description = "Pre-built, tested ns-3 images for contrib-module CI: ghcr.io/swarm-routing/ns3-dev with the ns-3 tree configured and built: debug, sanitized, default and optimized profiles on Ubuntu, debug and default on Debian, debug on Alpine; signed and attested."
 homepage = "https://swarm-routing.github.io/arena/ns3-containers/"
 topics = ["ns-3", "docker", "container-images", "ghcr", "ci", "sanitizers", "network-simulation", "reproducibility", "cosign"]
 ruleset = "tooling"
