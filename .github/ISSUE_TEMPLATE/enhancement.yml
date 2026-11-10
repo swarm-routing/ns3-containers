@@ -12,6 +12,8 @@ body:
       description: >
         Apply the matching area label(s) to the issue as well (dropdown choices
         are not auto-applied as labels). Add `epic` for umbrella issues.
+        Maintainers add `good first issue` or `help wanted` when an outside
+        contributor can take it.
       options:
         - protocol (a protocol's core/ algorithm)
         - adapter (ns-3 translation layer)
