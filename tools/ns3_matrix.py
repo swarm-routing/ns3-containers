@@ -4,7 +4,7 @@
 """Generate the ns3-dev image matrix from upstream ns-3 release tags.
 
     tools/ns3_matrix.py [--tags-file F] [--versions 3.36,3.46.1] [--sha SHA]
-                        [--missing-only] [--image REF]
+                        [--tier latest] [--missing-only] [--image REF]
 
 Prints a GitHub Actions matrix, {"include": [...]}, on stdout. Versions are
 never typed by hand: they are read from `git ls-remote` of ns-3-dev (or
@@ -41,6 +41,12 @@ An entry's `pr_unit_set` is the unit group its tests run on a pull request:
 only in the base OS; Ubuntu's debug and sanitized keep `full`), empty for
 Ubuntu (the profile's group). Pushes to main, schedule and dispatch runs
 ignore it and run every image's profile group (ns3-containers#87).
+
+--tier latest keeps only the supported release's entries (its full set, the
+images the automatic pipelines own). It is what an OS security refresh
+rebuilds (publish-images.yml `refresh`, #29): with --versions it refuses any
+release but the supported one, so a refresh never rebuilds history as a side
+effect (an older release is rebuilt only by an on-demand --versions build).
 
 --missing-only keeps only versions whose plain :<full-version> tag is not yet
 published (anonymous GHCR check): the scheduled run builds a new release once.
@@ -171,6 +177,9 @@ def main(argv=None):
                     help="on demand: comma-separated ns-3 releases, minor or full (e.g. 3.36,3.46.1); "
                          "default: the supported (latest) release only")
     ap.add_argument("--sha", default="", help="commit SHA for the immutable -<sha7> tags")
+    ap.add_argument("--tier", choices=["latest"],
+                    help="latest: only the supported release's entries (an OS security refresh); "
+                         "with --versions, refuse any other release")
     ap.add_argument("--missing-only", action="store_true", help="drop versions already published")
     ap.add_argument("--image", default=IMAGE)
     args = ap.parse_args(argv)
@@ -193,6 +202,12 @@ def main(argv=None):
             sys.exit(f"ns3_matrix: not an upstream ns-3 release: {', '.join(sorted(unknown))}")
     else:
         chosen = rel[:1]
+    if args.tier == "latest":
+        older = [f for _, f in chosen if f != newest_full]
+        if older:
+            sys.exit(f"ns3_matrix: --tier latest refreshes the supported release ({newest_full}) only, "
+                     f"not {', '.join(older)}: rebuild an older release on demand without it")
+        chosen = [(m, f) for m, f in chosen if f == newest_full]
     matrix = entries(chosen, newest_full, args.sha[:7])
     if args.missing_only:
         have = {v for v in {e["version"] for e in matrix} if published(args.image, v)}
