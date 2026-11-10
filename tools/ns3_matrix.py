@@ -36,6 +36,21 @@ An entry's `tags` are set when its image passes its tests; its `latest_tags`
 (empty except for the supported release) move last, once every required image
 of the run has passed (publish-images.yml).
 
+An entry's `pr_unit_set` is the unit group its tests run on a pull request:
+`light` for the Debian, slim and Alpine images (they differ from Ubuntu's
+only in the base OS; Ubuntu's debug and sanitized keep `full`), empty for
+Ubuntu (the profile's group). Pushes to main, schedule and dispatch runs
+ignore it and run every image's profile group (ns3-containers#87).
+
+An entry's `test_parts` are the test jobs its image gets, all on the same
+digest in the same run (ns3-containers#86): one part running every stage,
+or, for a profile with a `split <profile> <N>` line in test/ns3-suites.txt,
+a `base` part (every stage but unit) and the unit stage as one part (N = 1)
+or N shards (`test/run.sh --stages unit --unit-shard i/N`). promote tags the
+digest only when every part passed. `--check-suites` validates
+test/ns3-suites.txt: for N >= 2, the split profile's group has shards 1..N
+that list its modules exactly once.
+
 --tier latest keeps only the supported release's entries (its full set, the
 images the automatic pipelines own). It is what an OS security refresh
 rebuilds (publish-images.yml `refresh`, #29): with --versions it refuses any
@@ -50,6 +65,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -57,6 +73,10 @@ import urllib.error
 import urllib.request
 
 UPSTREAM = "https://gitlab.com/nsnam/ns-3-dev.git"
+SUITES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "test", "ns3-suites.txt")
+STAGES = ["labels", "security", "structure", "profile", "smoke", "integration", "unit"]
+# Which unit group a profile runs (test/unit.sh's default, without UNIT_SET).
+PROFILE_GROUP = {"debug": "full", "sanitized": "full", "default": "light", "optimized": "light"}
 IMAGE = "ghcr.io/swarm-routing/ns3-dev"
 
 # Base images, pinned by digest (ns3-containers invariant 13). Bump a digest
@@ -121,7 +141,8 @@ def plan_for(supported):
             + [("alpine", "debug")])
 
 
-def entries(chosen, newest_full, sha7=""):
+def entries(chosen, newest_full, sha7="", splits=None):
+    splits = read_suites()[1] if splits is None else splits
     out = []
     for minor, full in chosen:
         newest = full == newest_full
@@ -138,7 +159,80 @@ def entries(chosen, newest_full, sha7=""):
                 "cache": f"{minor}-{os_}-{profile}",
                 "tags": " ".join(tags),
                 "latest_tags": " ".join(latest),
+                "pr_unit_set": "" if os_ == "ubuntu" else "light",
+                "test_parts": test_parts(profile, splits),
             })
+    return out
+
+
+def read_suites(path=SUITES):
+    """test/ns3-suites.txt -> (groups {g: [mod]}, splits {profile: N}, shards {(g, N): {i: [mod]}})."""
+    groups, splits, shards = {}, {}, {}
+    with open(path) as f:
+        for raw in f:
+            w = raw.split("#", 1)[0].split()
+            if not w:
+                continue
+            if w[0] == "split":
+                splits[w[1]] = int(w[2])
+            elif w[0] == "shard":
+                i, n = (int(x) for x in w[2].split("/"))
+                shards.setdefault((w[1], n), {})[i] = w[3:]
+            else:
+                groups[w[0]] = w[1:]
+    return groups, splits, shards
+
+
+def check_suites(path=SUITES):
+    """Problems in test/ns3-suites.txt, as strings (empty: valid)."""
+    groups, splits, shards = read_suites(path)
+    errs = []
+    for profile, n in sorted(splits.items()):
+        g = PROFILE_GROUP.get(profile)
+        if g not in groups:
+            errs.append(f"split {profile} {n}: no '{g}' group")
+            continue
+        if n < 1:
+            errs.append(f"split {profile} {n}: N must be 1 or more")
+            continue
+        if n == 1:
+            continue  # the whole group in one job: nothing to cover
+        got = shards.get((g, n), {})
+        if sorted(got) != list(range(1, n + 1)):
+            errs.append(f"split {profile} {n}: '{g}' needs shards 1..{n}, has {sorted(got) or 'none'}")
+        listed = [mod for i in sorted(got) for mod in got[i]]
+        missing = sorted(set(groups[g]) - set(listed))
+        extra = sorted(set(listed) - set(groups[g]))
+        twice = sorted({mod for mod in listed if listed.count(mod) > 1})
+        for what, mods in (("missing", missing), ("not in the group", extra), ("in two shards", twice)):
+            if mods:
+                errs.append(f"'{g}' shards of {n}: {what}: {' '.join(mods)}")
+    for (g, n) in sorted(shards):
+        if g not in groups or n not in {splits[p] for p in splits if PROFILE_GROUP.get(p) == g}:
+            errs.append(f"shard lines for '{g}' of {n} that no split line uses")
+    return errs
+
+
+def test_parts(profile, splits):
+    """The test jobs of one image: everything in one job, or a base job plus the unit stage in N parts."""
+    n = splits.get(profile, 0)
+    if n < 1:
+        return [{"part": "all", "stages": "", "unit_shard": ""}]
+    base = {"part": "base", "stages": ",".join(s for s in STAGES if s != "unit"), "unit_shard": ""}
+    if n == 1:
+        return [base, {"part": "unit", "stages": "unit", "unit_shard": ""}]
+    return [base] + [{"part": f"unit-{i}-of-{n}", "stages": "unit", "unit_shard": f"{i}/{n}"}
+                     for i in range(1, n + 1)]
+
+
+def test_matrix(images):
+    """The `test` job's matrix: one entry per (image, part), named for the job list."""
+    out = []
+    for e in images:
+        for p in e["test_parts"]:
+            label = {"all": "", "base": " (every stage but unit)", "unit": " (unit)"}.get(
+                p["part"], f" (unit {p['unit_shard']})")
+            out.append({**{k: v for k, v in e.items() if k != "test_parts"}, **p, "test_name": e["name"] + label})
     return out
 
 
@@ -175,7 +269,18 @@ def main(argv=None):
                          "with --versions, refuse any other release")
     ap.add_argument("--missing-only", action="store_true", help="drop versions already published")
     ap.add_argument("--image", default=IMAGE)
+    ap.add_argument("--check-suites", action="store_true",
+                    help="only validate test/ns3-suites.txt (the unit shards cover each split group exactly)")
     args = ap.parse_args(argv)
+
+    if args.check_suites:
+        errs = check_suites()
+        for e in errs:
+            print(f"ns3_matrix: test/ns3-suites.txt: {e}", file=sys.stderr)
+        sys.exit(1 if errs else 0)
+    errs = check_suites()
+    if errs:
+        sys.exit("ns3_matrix: test/ns3-suites.txt: " + "; ".join(errs))
 
     if args.tags_file:
         with open(args.tags_file) as f:
