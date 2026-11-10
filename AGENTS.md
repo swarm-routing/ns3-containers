@@ -19,7 +19,7 @@ modules into the tree and builds them.
 
 ```
 docker/Dockerfile                 BASE_IMAGE x NS3_VERSION x BUILD_PROFILE image
-tools/ns3_matrix.py               supported release vs on-demand releases, base digests and tags (+ test_ns3_matrix.py)
+tools/ns3_matrix.py               supported release vs on-demand releases (`--tier latest`: the supported release only), base digests and tags (+ test_ns3_matrix.py)
 docker/gcovr-requirements.in      gcovr's pin for the debug/sanitized images; docker/gcovr-requirements.txt: its hashed lock (uv pip compile, command in the .in)
 docker/scripts/build-contrib.sh   -> /usr/local/bin/ns3-build-contrib (--strict-warnings / --coverage [--quality-modules] through swarm-quality.cmake, the contrib targets only; ns-3.43+ and 3.36-3.42 target names)
 test/run.sh                       every test stage against one image ref (the candidate digest in CI); `security` runs Trivy (pinned by digest) on the host
@@ -35,7 +35,7 @@ test/known-failures.txt           upstream bugs expected on one exact ns-3 versi
 test/fixtures/swarm-hello/        minimal contrib module (C++17..C++23) used by the smoke (GPL-2.0-only: an ns-3 module)
 test/fixtures/manet-canary/       short MANET program for the integration stage (GPL-2.0-only)
 test/fixtures/profile-probe/      one deliberate assert/log/memory bug per mode, for the profile stage (GPL-2.0-only)
-.github/workflows/publish-images.yml   resolve -> build once (candidate in ns3-dev-ci) -> test by digest -> promote = retag the same digest (main) -> sign -> attest -> CVE report to code scanning (non-blocking) -> latest-* -> discard this run's candidates (PRs too); weekly new release; `versions` = on demand; runs on every PR (other paths: empty matrix), `images gate` is the check to require
+.github/workflows/publish-images.yml   resolve -> build once (candidate in ns3-dev-ci) -> test by digest -> promote = retag the same digest (main) -> sign -> attest -> CVE report to code scanning (non-blocking) -> latest-* -> discard this run's candidates (PRs too); weekly new release; `versions` = on demand; `refresh` = OS security refresh of the supported release (REFRESH=<run id>, --tier latest); runs on every PR (other paths: empty matrix), `images gate` is the check to require
 .github/workflows/container-security.yml   every push/PR: hadolint (gate) and a Trivy config scan, both as SARIF to code scanning (the image CVE report is in publish-images' promote job)
 .github/workflows/pr-title.yml         the PR title is a lowercase Conventional Commit (reusable-pr-title.yml)
 .github/workflows/candidates-cleanup.yml   daily: ns3-dev-ci candidates left by failed runs (> 7 days), untagged ns3-dev-cache versions (> 1 day); never ns3-dev
@@ -79,8 +79,10 @@ Org-wide (1–9), then this repo's own.
    `LICENSING.md` in the same PR.
 2. **The licence boundary only goes one way.** GPL code may use the dual
    parts; dual code never pulls GPL-only code in: a `core/` file includes only
-   the C++ standard library and other `core/` files (CI checks it), and a dual
-   script imports no GPL-only code. Code coming from AntHocNet keeps its
+   the C++ standard library, other `core/` files and the dual-licensed `core/`
+   of a dependency pinned by commit and declared in the repo's `licence.yml`
+   `core-deps` (a protocol's `core/` on swarm-core's; CI checks it,
+   `check-headers.py --core-dep`), and a dual script imports no GPL-only code. Code coming from AntHocNet keeps its
    licence: its `core/`/`tools/` (dual) may land in dual or GPL paths here; its
    `ns3/` modules and `web/` (GPL-2.0-only) only in GPL paths. Third-party code
    (AntHocNet's vendored `aomdv`/`gpsr`, IITP RAS) lands only in GPL paths with
@@ -105,6 +107,10 @@ Org-wide (1–9), then this repo's own.
    carry a configured cap).
 8. **CI hygiene.** Actions pinned by full commit SHA with a `# vX.Y.Z` comment;
    buildx caches scoped per profile; transient artifacts `retention-days` <= 7.
+   Every job has a `timeout-minutes` cap, and every apt, npm or installer step
+   its own, sized from recent green runs; `apt-get update` runs with
+   `--error-on=any` inside a shell retry. Ubuntu mirror outages are the usual
+   cause of a red run.
 9. **Nothing shipped depends on `.claude/`.** Skills hold procedures; scripts
    that anything shipped needs live in `tools/` (AntHocNet ADR-0014).
 <!-- org-sync:end org-rules -->
@@ -168,6 +174,28 @@ Org-wide (1–9), then this repo's own.
   the commit on `main`, so it is a lowercase Conventional Commit
   (`feat:`/`fix:`/`docs:`/`chore:`/`ci:`…, optional scope).
 - Push with `git push -u origin <branch>`; merge when CI is green.
+- **`main` takes no direct push**, in any repo: its ruleset requires a PR, an
+  up-to-date branch and the required checks. Bots push `bot/<name>` branches
+  and open PRs; a release is the bump PR from `bot/release`, tagged after it
+  merges (CONTRIBUTING "Cutting a release").
+- When a PR falls behind `main`, update it
+  (`gh api -X PUT repos/<owner>/<repo>/pulls/<n>/update-branch`) and merge PRs
+  one at a time, each after its CI on the updated branch. Never force-push a
+  branch someone else pushed. A behind `bot/release` PR is the exception:
+  dispatch the release `bump` again, so the version and changelog are rebuilt
+  on the new `main`.
+- **Settings are code.** Repository settings, rulesets, required checks and the
+  Actions allowlist change only by a PR to the repo's `[settings]` in
+  `.github/org-sync.toml` or to `templates/rulesets/` in `swarm-routing/.github`,
+  never in the UI or by a direct API write. A `templates/rulesets/` change
+  applies on merge; a repo's `[settings]` change applies when `repo-settings`
+  in `swarm-routing/.github` is dispatched with mode `apply` after the merge
+  (the daily run only checks). A required check runs on every PR (no `paths:`
+  filter; skip work inside a gate job instead) and is named exactly as its
+  check run. A new third-party action goes into `defaults.json`
+  `selected_actions` (`templates/rulesets/`) before or with the workflow that
+  uses it: in the same PR in `swarm-routing/.github`, otherwise merged there
+  first, or `repo-settings` refuses the repo.
 <!-- org-sync:end git-workflow -->
 
 <!-- org-sync:begin skills -->

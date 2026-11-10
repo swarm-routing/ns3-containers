@@ -116,5 +116,35 @@ class OnDemand(unittest.TestCase):
             run(LS_REMOTE, "--versions", "3.99")
 
 
+class TierLatest(unittest.TestCase):
+    """--tier latest: the supported release's full set only (an OS security refresh, #29)."""
+
+    def test_same_set_as_the_automatic_pipelines(self):
+        self.assertEqual(run(LS_REMOTE, "--tier", "latest", "--sha", "290685f"),
+                         run(LS_REMOTE, "--sha", "290685f"))
+
+    def test_only_supported_entries_with_latest_tags(self):
+        mx = run(LS_REMOTE, "--tier", "latest")
+        self.assertEqual(len(mx), 9)
+        self.assertEqual({e["version"] for e in mx}, {"3.49"})
+        self.assertTrue(all(e["latest_tags"] for e in mx))
+
+    def test_supported_release_named_explicitly(self):
+        # The scanner (#30) dispatches refresh with versions=<that version>.
+        for v in ("3.49", "3.49,3.49"):
+            mx = run(LS_REMOTE, "--tier", "latest", "--versions", v)
+            self.assertEqual(len(mx), 9)
+
+    def test_refuses_an_older_release(self):
+        # Invariant 16: a refresh never rebuilds history as a side effect.
+        for v in ("3.48", "3.49,3.36"):
+            with self.assertRaises(SystemExit):
+                run(LS_REMOTE, "--tier", "latest", "--versions", v)
+
+    def test_unknown_tier_refused(self):
+        with self.assertRaises(SystemExit), redirect_stderr(io.StringIO()):
+            run(LS_REMOTE, "--tier", "all")
+
+
 if __name__ == "__main__":
     unittest.main()

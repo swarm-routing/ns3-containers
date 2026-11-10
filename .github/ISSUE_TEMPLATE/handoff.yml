@@ -45,3 +45,15 @@ body:
     id: decisions
     attributes:
       label: Decisions pending, and who makes them
+  - type: textarea
+    id: lessons
+    attributes:
+      label: Lessons for the AI files
+      description: >-
+        What a future agent should find in AGENTS.md, CLAUDE.md or CONTEXT.md, and for each
+        whether it is an org rule (every repository: swarm-routing/.github templates/ and
+        CONTRIBUTING.md) or a local fact (this repository's own AI files). The docs-review
+        skill turns them into PRs.
+      placeholder: |
+        - org rule: …
+        - local fact: …

@@ -28,7 +28,11 @@ release or, rarely, a point release such as 3.46.1). So the automatic
 pipelines build **the latest ns-3 release** only, read from upstream's tags by
 [`tools/ns3_matrix.py`](tools/ns3_matrix.py): a new release is picked up
 within a week, and every image change or OS security refresh (#27) rebuilds
-it alone. Follow it with the `latest-*` tags.
+it alone. Follow it with the `latest-*` tags. An OS security refresh is the
+*Publish images* workflow dispatched with `refresh: true`: it rebuilds the
+supported release only, with its OS-package layer rerun (`REFRESH=<run id>`)
+so the distribution's fixes since the base digest are installed, then tests
+and promotes it like any build (the rolling tags move; the `-<sha7>` pins stay).
 
 | Release | Base | Profiles |
 |---|---|---|
@@ -205,7 +209,9 @@ downstream canary.
 (not for consumers; each clean run, PRs included, deletes its own, and a daily job sweeps leftovers and the cache's untagged versions). The tests run on that candidate
 **by digest**. Only an image whose tests passed gets its `ns3-dev` tags, as a
 byte-identical copy of the tested digest (no rebuild), then a keyless cosign
-signature and a provenance attestation. The `latest-*` tags move last, and
+signature, a provenance attestation and a CycloneDX SBOM attestation (the
+OS packages plus ns-3 itself; see [SECURITY.md](SECURITY.md#verifying-what-it-ships)),
+all on that digest, so every tag of it carries them. The `latest-*` tags move last, and
 only when every required image of the run passed. On-demand builds of older
 releases go through the same tests. The buildx cache lives in
 `ghcr.io/swarm-routing/ns3-dev-cache`, one tag per version × base × profile.
