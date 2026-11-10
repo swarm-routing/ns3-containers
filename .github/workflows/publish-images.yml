@@ -33,6 +33,12 @@ name: Publish images
 #   schedule (weekly)                                  supported release, only if not yet published
 #   workflow_dispatch                                  `versions` (any release, on demand), else
 #                                                      the supported release; promote on main
+#   workflow_dispatch refresh: true                    OS security refresh (#29): the supported
+#                                                      release only (--tier latest; `versions` may
+#                                                      name it, any other is refused), built with
+#                                                      REFRESH=<run id> so the OS-package layer
+#                                                      reruns and picks up the distro's fixes; the
+#                                                      rolling tags move, the -<sha7> pins stay
 #
 # Tags (see tools/ns3_matrix.py): :<ver>-<profile>, :<ver> (= default profile),
 # :<ver>-<os>-<profile>, the supported release's :latest-<profile> and :latest,
@@ -60,6 +66,11 @@ on:
         description: 'On demand: comma-separated ns-3 releases (e.g. 3.36,3.42); empty = the supported (latest) release'
         required: false
         default: ''
+      refresh:
+        description: 'OS security refresh: rebuild the supported release with fresh OS packages (REFRESH=<run id>, --tier latest)'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -94,10 +105,12 @@ jobs:
         id: m
         env:
           VERSIONS: ${{ inputs.versions }}
+          REFRESH: ${{ inputs.refresh == true }}
           MISSING_ONLY: ${{ github.event_name == 'schedule' }}
         run: |
           args=(--sha "$GITHUB_SHA" --image "$IMAGE")
           [ -n "$VERSIONS" ] && args+=(--versions "$VERSIONS")
+          [ "$REFRESH" = true ] && args+=(--tier latest)
           [ "$MISSING_ONLY" = true ] && args+=(--missing-only)
           matrix=$(python3 tools/ns3_matrix.py "${args[@]}")
           count=$(printf '%s' "$matrix" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["include"]))')
@@ -145,6 +158,7 @@ jobs:
             BUILD_PROFILE=${{ matrix.profile }}
             REVISION=${{ github.sha }}
             BUILD_RUN=${{ github.run_id }}-${{ github.run_attempt }}
+            REFRESH=${{ inputs.refresh == true && github.run_id || 'none' }}
           tags: ${{ env.WRITE_REGISTRY == 'true' && format('{0}:{1}-{2}-{3}', env.CANDIDATE, github.run_id, github.run_attempt, matrix.name) || format('ns3-dev-local:{0}', matrix.name) }}
           push: ${{ env.WRITE_REGISTRY == 'true' }}
           # A fork PR cannot push: it loads the image and is tested in place.
