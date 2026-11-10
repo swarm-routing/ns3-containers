@@ -1,0 +1,14 @@
+# hadolint settings for docker/Dockerfile (Container Security workflow; run
+# locally with `hadolint docker/Dockerfile`, which reads this file).
+#
+# DL3008/DL3018 (pin apt/apk package versions) are ignored on purpose: the
+# base images are pinned by digest (tools/ns3_matrix.py), and pinning each
+# distribution package would make every OS security update break the build
+# until someone bumps the pin by hand.
+failure-threshold: warning
+ignored:
+  - DL3008
+  - DL3018
+trustedRegistries:
+  - docker.io
+  - ghcr.io
