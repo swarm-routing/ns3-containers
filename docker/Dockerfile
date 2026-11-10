@@ -54,11 +54,19 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Acquire::Retries=0: the base's own apt does the download that installs the
 # fix, and CVE-2026-109518 (apt, hard-link reuse) needs a non-zero retry count
 # to be exploited over HTTP (Ubuntu's advisory; the default is 3 since Ubuntu
-# 22.04 / Debian 12). A transient mirror error now fails the build instead.
+# 22.04 / Debian 12). So the update fails hard on any fetch error
+# (--error-on=any; without it a failed index is only a warning and the install
+# fails minutes later with "has no installation candidate") and only the update
+# is retried, by the shell: 3 attempts, 10 s then 20 s apart. apk refetches its
+# index inside each --no-cache command, so it has no update step to retry.
 ARG REFRESH=none
 RUN echo "package refresh: ${REFRESH}" \
  && if command -v apt-get >/dev/null; then \
-        apt-get -o Acquire::Retries=0 update \
+        for delay in 10 20 0; do \
+            apt-get -o Acquire::Retries=0 update --error-on=any && break; \
+            [ "${delay}" -gt 0 ] || exit 1; \
+            echo "apt-get update failed; retrying in ${delay} s" >&2; sleep "${delay}"; \
+        done \
      && apt-get -o Acquire::Retries=0 upgrade -y --no-install-recommends \
      && apt-get -o Acquire::Retries=0 install -y --no-install-recommends \
             ca-certificates git g++ cmake ninja-build python3 make \
