@@ -62,7 +62,7 @@ class PassMarkers(unittest.TestCase):
         os.makedirs(sub)
         for name, part in (("../outside/x", "all"), ("3.49-debug", "../../outside/x"),
                            ("3.49/debug", "all"), ("3.49-debug", ".."), ("", "all")):
-            with self.assertRaisesRegex(ValueError, "not a valid"):
+            with self.assertRaisesRegex(ValueError, "did not pass"):
                 pm.digest_of(sub, name, [{"part": part}])
 
     def test_cli_exit_codes(self):
