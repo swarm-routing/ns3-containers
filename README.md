@@ -7,8 +7,11 @@
 [![Colony Arena: ns3-containers](https://img.shields.io/badge/Colony%20Arena-project%20page-orange)](https://swarm-routing.github.io/arena/ns3-containers/)
 [![GHCR: ns3-dev](https://img.shields.io/badge/ghcr.io-swarm--routing%2Fns3--dev-blue?logo=docker)](https://github.com/orgs/swarm-routing/packages/container/package/ns3-dev)
 [![Images signed: cosign](https://img.shields.io/badge/images%20signed-cosign-success)](SECURITY.md#verifying-what-it-ships)
+[![Container Security (Hadolint & Trivy)](https://github.com/swarm-routing/ns3-containers/actions/workflows/container-security.yml/badge.svg)](https://github.com/swarm-routing/ns3-containers/actions/workflows/container-security.yml)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=swarm-routing_ns3-containers&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=swarm-routing_ns3-containers)
 [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=swarm-routing_ns3-containers&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=swarm-routing_ns3-containers)
+[![Hadolint](https://img.shields.io/github/check-runs/swarm-routing/ns3-containers/main?nameFilter=hadolint&label=Hadolint&logo=docker)](https://github.com/swarm-routing/ns3-containers/actions/workflows/container-security.yml)
+[![Trivy](https://img.shields.io/github/check-runs/swarm-routing/ns3-containers/main?nameFilter=trivy-config&label=Trivy&logo=aquasecurity)](https://github.com/swarm-routing/ns3-containers/security/code-scanning)
 [![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/swarm-routing/ns3-containers?utm_source=oss&utm_medium=github&utm_campaign=swarm-routing%2Fns3-containers&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)](https://coderabbit.ai)
 <!-- org-sync:end badges -->
 
