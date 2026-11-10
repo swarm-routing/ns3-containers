@@ -1,0 +1,6 @@
+# gcovr for the debug and sanitized images (docker/Dockerfile). Recompile the hashed lock after a bump:
+#   uv pip compile --universal --python-version 3.12 --generate-hashes --no-header \
+#       --annotation-style line docker/gcovr-requirements.in -o docker/gcovr-requirements.txt
+# Not 8.7 or 8.8: both stop on gcc 13 coverage data of a contrib module with
+# "maximum recursion depth exceeded" (test/smoke.sh catches it); 8.6 reports it.
+gcovr==8.6
