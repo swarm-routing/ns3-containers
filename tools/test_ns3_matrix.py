@@ -156,5 +156,71 @@ class TierLatest(unittest.TestCase):
             run(LS_REMOTE, "--tier", "all")
 
 
+def suites(text):
+    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as f:
+        f.write(text)
+    try:
+        return m.check_suites(f.name)
+    finally:
+        os.unlink(f.name)
+
+
+GROUPS = "full  core network wifi aodv\nlight core network\n"
+
+
+class UnitShards(unittest.TestCase):
+    """#86: the sanitized unit stage runs as N shards that cover its group exactly."""
+
+    def test_repository_file_is_valid(self):
+        self.assertEqual(m.check_suites(), [])
+
+    def test_exact_cover_passes(self):
+        self.assertEqual(suites(GROUPS + "split sanitized 2\nshard full 1/2 wifi\nshard full 2/2 core network aodv\n"), [])
+
+    def test_missing_module_fails(self):
+        errs = suites(GROUPS + "split sanitized 2\nshard full 1/2 wifi\nshard full 2/2 core network\n")
+        self.assertTrue(any("missing: aodv" in e for e in errs), errs)
+
+    def test_module_in_two_shards_fails(self):
+        errs = suites(GROUPS + "split sanitized 2\nshard full 1/2 wifi core\nshard full 2/2 core network aodv\n")
+        self.assertTrue(any("in two shards: core" in e for e in errs), errs)
+
+    def test_foreign_module_fails(self):
+        errs = suites(GROUPS + "split sanitized 2\nshard full 1/2 wifi mesh\nshard full 2/2 core network aodv\n")
+        self.assertTrue(any("not in the group: mesh" in e for e in errs), errs)
+
+    def test_missing_shard_fails(self):
+        errs = suites(GROUPS + "split sanitized 3\nshard full 1/3 wifi\nshard full 2/3 core network aodv\n")
+        self.assertTrue(any("needs shards 1..3" in e for e in errs), errs)
+
+    def test_split_in_one_unit_job_needs_no_shards(self):
+        self.assertEqual(suites(GROUPS + "split sanitized 1\n"), [])
+
+    def test_unused_shard_lines_fail(self):
+        errs = suites(GROUPS + "shard full 1/2 wifi\nshard full 2/2 core network aodv\n")
+        self.assertTrue(any("no split line uses" in e for e in errs), errs)
+
+    def test_parts(self):
+        self.assertEqual(m.test_parts("debug", {"sanitized": 3}),
+                         [{"part": "all", "stages": "", "unit_shard": ""}])
+        self.assertEqual([p["part"] for p in m.test_parts("sanitized", {"sanitized": 1})], ["base", "unit"])
+        parts = m.test_parts("sanitized", {"sanitized": 3})
+        self.assertEqual([p["part"] for p in parts], ["base", "unit-1-of-3", "unit-2-of-3", "unit-3-of-3"])
+        self.assertNotIn("unit", parts[0]["stages"].split(","))
+        self.assertEqual(parts[0]["stages"].split(",") + ["unit"], m.STAGES)
+        self.assertEqual({p["stages"] for p in parts[1:]}, {"unit"})
+
+    def test_test_matrix(self):
+        mx = run(LS_REMOTE, "--sha", "290685fdeadbeef")
+        tm = m.test_matrix(mx)
+        n = m.read_suites()[1].get("sanitized", 0)
+        self.assertEqual(len(tm), len(mx) + n)
+        names = [t["test_name"] for t in tm]
+        self.assertEqual(len(names), len(set(names)))
+        self.assertTrue(all("test_parts" not in t for t in tm))
+        for e in mx:
+            self.assertEqual(sum(t["name"] == e["name"] for t in tm), len(e["test_parts"]))
+
+
 if __name__ == "__main__":
     unittest.main()

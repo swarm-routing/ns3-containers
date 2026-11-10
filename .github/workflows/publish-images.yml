@@ -17,8 +17,12 @@ name: Publish images
 #   build    each image is built ONCE and pushed to the candidate package
 #            ns3-dev-ci (never pulled by consumers); its digest is recorded
 #   test     every test stage (test/run.sh) runs on <candidate>@<digest>,
-#            the image that build produced -- never a rebuild, never a tag
-#   promote  an image whose tests passed gets its versioned and -<sha7> tags
+#            the image that build produced -- never a rebuild, never a tag.
+#            An image whose profile has a `split` line in test/ns3-suites.txt
+#            (sanitized) is tested by several parallel jobs on that same
+#            digest: every stage but unit, and the unit stage (one job, or N
+#            shards) (#86); each job leaves its own pass marker
+#   promote  an image all of whose test jobs passed gets its versioned and -<sha7> tags
 #            by `imagetools create` from that same digest (a carbon copy, no
 #            rebuild), then is signed and attested by digest; a
 #            non-blocking Trivy CVE report of that digest goes to code scanning
@@ -108,6 +112,7 @@ jobs:
     timeout-minutes: 10
     outputs:
       matrix: ${{ steps.m.outputs.matrix }}
+      tests: ${{ steps.m.outputs.tests }}
       count: ${{ steps.m.outputs.count }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -130,9 +135,11 @@ jobs:
             printf '%s\n' "$files" | grep -qE '^(docker|test|tools)/|^\.github/workflows/publish-images\.yml$' || images=false
           fi
           echo "images=$images" >> "$GITHUB_OUTPUT"
-      - name: Test the matrix generator
+      - name: Test the matrix generator and the unit shards
         if: steps.changes.outputs.images == 'true'
-        run: python3 -m unittest discover -s tools -v
+        run: |
+          python3 -m unittest discover -s tools -v
+          python3 tools/ns3_matrix.py --check-suites
       - name: Generate the matrix from upstream tags
         id: m
         env:
@@ -152,8 +159,9 @@ jobs:
             echo "no image path changed: nothing to build" >> "$GITHUB_STEP_SUMMARY"
           fi
           count=$(printf '%s' "$matrix" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["include"]))')
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
-          echo "count=$count" >> "$GITHUB_OUTPUT"
+          # One test job per image and test part (#86): split images get several.
+          tests=$(printf '%s' "$matrix" | python3 -c 'import json,sys; sys.path.insert(0, "tools"); import ns3_matrix as m; print(json.dumps({"include": m.test_matrix(json.load(sys.stdin)["include"])}, separators=(",", ":")))')
+          { echo "matrix=$matrix"; echo "tests=$tests"; echo "count=$count"; } >> "$GITHUB_OUTPUT"
           printf '%s' "$matrix" | python3 -c 'import json,sys; [print(e["name"], "<-", e["version"], "|", e["tags"]) for e in json.load(sys.stdin)["include"]]' >> "$GITHUB_STEP_SUMMARY"
 
   build:
@@ -235,7 +243,7 @@ jobs:
         run: test/run.sh "ns3-dev-local:${NAME}"
 
   test:
-    name: test ${{ matrix.name }}
+    name: test ${{ matrix.test_name }}
     needs: [resolve, build]
     # Run each image's tests even if another image failed to build; a leg
     # whose own build failed finds no digest and fails here, which is right.
@@ -248,7 +256,9 @@ jobs:
       packages: read       # pull the candidate; tests can never push or tag
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.resolve.outputs.matrix) }}
+      # One job per image and test part: a split image (sanitized) runs its
+      # unit stage beside its other stages, each on the same candidate digest (#86).
+      matrix: ${{ fromJSON(needs.resolve.outputs.tests) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -280,20 +290,28 @@ jobs:
           EXPECT_BUILD_RUN: ${{ steps.pull.outputs.build_run }}
           # Pull requests only: the OS variants run the light unit group (#87).
           UNIT_SET: ${{ github.event_name == 'pull_request' && matrix.pr_unit_set || '' }}
-        run: test/run.sh "$REF"
+          STAGES: ${{ matrix.stages }}
+          SHARD: ${{ matrix.unit_shard }}
+        run: |
+          args=()
+          [ -n "$STAGES" ] && args+=(--stages "$STAGES")
+          [ -n "$SHARD" ] && args+=(--unit-shard "$SHARD")
+          test/run.sh "${args[@]}" "$REF"
       - name: Mark as passed
         run: mkdir -p pass && cp marker/digest pass/digest
+      # One marker per test part; promote needs every part's (#86).
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: passed-${{ matrix.name }}
+          name: passed-${{ matrix.name }}--${{ matrix.part }}
           path: pass/digest
           retention-days: 1
 
   promote:
     name: promote ${{ matrix.name }}
     needs: [resolve, test]
-    # Per image: an image is tagged only if its own tests passed (its
-    # passed-<name> marker exists), whatever happened to the others.
+    # Per image: an image is tagged only if every one of its test jobs
+    # passed (a passed-<name>--<part> marker per part, all naming the same
+    # digest), whatever happened to the others.
     if: ${{ !cancelled() && needs.resolve.outputs.count != '0' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -309,24 +327,25 @@ jobs:
       matrix: ${{ fromJSON(needs.resolve.outputs.matrix) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Find this image's pass marker
+      - name: Find this image's pass markers
         id: passed
         continue-on-error: true
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: passed-${{ matrix.name }}
+          pattern: passed-${{ matrix.name }}--*
           path: pass
-      - name: Stop if its tests did not pass
+      - name: Stop unless every test part passed
         id: gate
         env:
           NAME: ${{ matrix.name }}
+          PARTS: ${{ toJSON(matrix.test_parts) }}
         run: |
-          if [ ! -s pass/digest ]; then
-            echo "::error::$NAME did not pass its tests: no tag is created"
+          if ! digest=$(python3 tools/pass_markers.py pass "$NAME" "$PARTS"); then
+            echo "::error::$NAME did not pass every test job: no tag is created"
             echo "$NAME: not promoted (tests did not pass)" >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
-          echo "digest=$(cat pass/digest)" >> "$GITHUB_OUTPUT"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Log in to GHCR
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -467,6 +486,7 @@ jobs:
       contents: read
       packages: write
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: passed-*
@@ -482,14 +502,12 @@ jobs:
         env:
           MATRIX: ${{ needs.resolve.outputs.matrix }}
         run: |
-          printf '%s' "$MATRIX" | python3 -c 'import json,sys; [print(e["name"], e["latest_tags"]) for e in json.load(sys.stdin)["include"] if e["latest_tags"]]' |
-          while read -r name tags; do
-            f="pass/passed-${name}/digest"
-            if [ ! -s "$f" ]; then
+          printf '%s' "$MATRIX" | python3 -c 'import json,sys; [print(e["name"], json.dumps(e["test_parts"], separators=(",", ":")), e["latest_tags"]) for e in json.load(sys.stdin)["include"] if e["latest_tags"]]' |
+          while read -r name parts tags; do
+            if ! digest=$(python3 tools/pass_markers.py pass "$name" "$parts"); then
               echo "$name: did not pass (experimental), latest tags left as they are" >> "$GITHUB_STEP_SUMMARY"
               continue
             fi
-            digest=$(cat "$f")
             # An experimental image can pass its tests and still fail to be
             # promoted (its promote leg may fail without failing the run);
             # its digest is then not in ns3-dev and its latest tags stay put.

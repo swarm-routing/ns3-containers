@@ -9,3 +9,19 @@
 # models (aodv, olsr, dsdv) and mesh (in NS3_MODULES).
 full  core network internet mobility wifi propagation aodv olsr dsdv mesh
 light core network internet
+
+# Split test jobs (ns3-containers#86). `split <profile> <N>`: publish-images.yml
+# tests that profile's image in parallel jobs on the same digest: one job with
+# every stage but unit, and the unit stage as N jobs. N = 1 runs the whole
+# group in one job; N >= 2 runs `shard <group> i/N <module>...` lines, which
+# must list every module of the group exactly once (tools/ns3_matrix.py
+# --check-suites, and test/unit.sh at run time).
+#
+# Sanitized, ns-3.49, measured in #89's run: the stages but unit take 712 s,
+# the unit stage 2475 s (test libraries 509 s, test.py 1963 s). test.py's wall
+# time is one suite: ns3-tcp-cubic (internet) runs 1936 s alone under
+# ASan+UBSan, while the other 212 suites (5022 s in all) share the other three
+# cores beside it. No unit shard can finish below that suite: an internet
+# shard would still take about 36 min, for about 23 more runner-minutes. So
+# the unit stage stays one job and only the other stages move out.
+split sanitized 1

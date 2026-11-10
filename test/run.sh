@@ -4,7 +4,16 @@
 #
 # Run every test stage against one image, from the runner (or a workstation):
 #
-#   test/run.sh <image-ref>
+#   test/run.sh [--stages a,b,...] [--unit-shard i/N] <image-ref>
+#
+# With no option it runs every stage, in order: labels, security, structure,
+# profile, smoke, integration, unit. That is what local runs, fork PRs and
+# on-demand builds do. --stages runs only the named ones (same order);
+# --unit-shard i/N makes the unit stage run shard i of N of its group, as
+# listed in test/ns3-suites.txt (ns3-containers#86). The pipeline splits an
+# image's tests into parallel jobs this way, each on the same digest, and
+# promotes the digest only when every job passed; the shards of a group must
+# cover it exactly, or the unit stage fails.
 #
 # <image-ref> is the image built in the same pipeline run, addressed by its
 # digest (ghcr.io/...@sha256:...) or, for a fork PR that cannot push, the
@@ -28,7 +37,24 @@
 # cannot apply to a release says SKIP (<reason>); it never passes silently.
 set -euo pipefail
 
-[ $# -eq 1 ] || { echo "usage: $0 <image-ref>" >&2; exit 2; }
+all_stages="labels security structure profile smoke integration unit"
+usage() { echo "usage: $0 [--stages a,b,...] [--unit-shard i/N] <image-ref>" >&2; exit 2; }
+stages=$all_stages
+unit_shard=""
+while [ $# -gt 1 ]; do
+    case "$1" in
+        --stages) [ $# -gt 2 ] || usage; stages=${2//,/ }; shift 2 ;;
+        --unit-shard) [ $# -gt 2 ] || usage; unit_shard=$2; shift 2 ;;
+        *) usage ;;
+    esac
+done
+[ $# -eq 1 ] || usage
+for s in $stages; do
+    case " $all_stages " in *" $s "*) ;; *) echo "test/run.sh: unknown stage '$s' (stages: $all_stages)" >&2; exit 2 ;; esac
+done
+if [ -n "$unit_shard" ] && ! [[ "$unit_shard" =~ ^[1-9][0-9]*/[1-9][0-9]*$ ]]; then
+    echo "test/run.sh: --unit-shard takes i/N, not '$unit_shard'" >&2; exit 2
+fi
 image=$1
 repo=$(cd "$(dirname "$0")/.." && pwd)
 summary=${GITHUB_STEP_SUMMARY:-/dev/null}
@@ -79,7 +105,8 @@ stage() {
 in_image() {
     docker run --rm -v "$repo:/src:ro" \
         -e EXPECT_VERSION="${EXPECT_VERSION:-}" -e EXPECT_PROFILE="${EXPECT_PROFILE:-}" \
-        -e EXPECT_OS="${EXPECT_OS:-}" -e UNIT_SET="${UNIT_SET:-}" "$image" "$@"
+        -e EXPECT_OS="${EXPECT_OS:-}" -e UNIT_SET="${UNIT_SET:-}" -e UNIT_SHARD="$unit_shard" \
+        "$image" "$@"
 }
 
 # OCI labels, read from the image config on the runner (ns3-containers#39).
@@ -147,14 +174,19 @@ security() {
 {
     echo "### Tests on \`$image\`"
     echo
+    if [ "$stages" != "$all_stages" ] || [ -n "$unit_shard" ]; then
+        echo "Part of the image's tests: stages \`${stages// /,}\`${unit_shard:+, unit shard \`$unit_shard\`} (the other jobs of this run test the same digest)"
+        echo
+    fi
     echo "| Stage | Result | Time |"
     echo "|---|---|---|"
 } >> "$summary"
 
-stage labels labels
-stage security security
-stage structure in_image bash /src/test/structure.sh
-stage profile in_image bash /src/test/profile.sh
-stage smoke in_image bash /src/test/smoke.sh
-stage integration in_image bash /src/test/integration.sh
-stage unit in_image bash /src/test/unit.sh
+for s in $stages; do
+    case "$s" in
+        labels|security) stage "$s" "$s" ;;
+        # No "/" in a stage name: it goes into a sed replacement.
+        unit) stage "unit${unit_shard:+ (shard ${unit_shard%/*} of ${unit_shard#*/})}" in_image bash /src/test/unit.sh ;;
+        *) stage "$s" in_image bash "/src/test/$s.sh" ;;
+    esac
+done
