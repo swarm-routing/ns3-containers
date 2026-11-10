@@ -10,6 +10,20 @@
 full  core network internet mobility wifi propagation aodv olsr dsdv mesh
 light core network internet
 
+# Suites deferred to main (ns3-containers#86, #87; maintainer decision on #86,
+# 2026-11-10). `main-only <suite>...`: on a pull request (UNIT_PR=1) the unit
+# stage leaves these suites out, whatever the group, and says so in the job
+# log and the step summary. Pushes to main, schedule and dispatch runs, and
+# any run without UNIT_PR run them. Nothing is tagged on a pull request and
+# promote runs only on main, so every published image is still tested with
+# them (golden rule 17).
+#
+# ns3-tcp-cubic (internet, so in both groups) is the one suite that sets the
+# stage's wall time: 1343-1936 s under ASan+UBSan, 470 s on debug and 348 s on
+# the light group's Debian images, where it is 348 of the 350 s of test.py
+# (#89's and #92's runs).
+main-only ns3-tcp-cubic
+
 # Split test jobs (ns3-containers#86). `split <profile> <N>`: publish-images.yml
 # tests that profile's image in parallel jobs on the same digest: one job with
 # every stage but unit, and the unit stage as N jobs. N = 1 runs the whole
@@ -23,5 +37,8 @@ light core network internet
 # ASan+UBSan, while the other 212 suites (5022 s in all) share the other three
 # cores beside it. No unit shard can finish below that suite: an internet
 # shard would still take about 36 min, for about 23 more runner-minutes. So
-# the unit stage stays one job and only the other stages move out.
+# the unit stage stays one job and only the other stages move out. With
+# ns3-tcp-cubic deferred to main on pull requests the unit stage is still
+# about 20 min (test libraries plus wifi-mac-ofdma, the next slowest suite),
+# so the two stages together would exceed 25 min in one job: the split stays.
 split sanitized 1
