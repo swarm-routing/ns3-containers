@@ -1,0 +1,89 @@
+# Copyright (c) 2026 Daniel Joppi (https://github.com/swarm-routing)
+# SPDX-License-Identifier: MIT OR GPL-2.0-only
+name: Container Security
+
+# Static checks of the image recipe, reported to code scanning:
+#
+#   hadolint       docker/Dockerfile against .hadolint.yaml; a warning or worse
+#                  fails the job (the SARIF upload is the same result, for the
+#                  Security tab)
+#   trivy-config   Trivy's misconfiguration scan of the repository, HIGH and
+#                  CRITICAL, .trivyignore applied. Visibility only: the
+#                  blocking config gate is test/run.sh's security stage, run on
+#                  every image by publish-images.yml.
+#
+# The CVE scan of the published images is in publish-images.yml (promote job).
+# Fork PRs get a read-only token, so they lint but skip the SARIF uploads.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  hadolint:
+    name: hadolint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write   # SARIF upload
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # recursive: every **/Dockerfile from the root, i.e. docker/Dockerfile.
+      - name: hadolint (SARIF report)
+        uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
+        with:
+          recursive: true
+          config: .hadolint.yaml
+          failure-threshold: warning
+          format: sarif
+          output-file: hadolint.sarif
+          no-fail: true
+      - name: Upload to code scanning
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: hadolint.sarif
+          category: hadolint
+      - name: hadolint (gate)
+        uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
+        with:
+          recursive: true
+          config: .hadolint.yaml
+          failure-threshold: warning
+
+  trivy-config:
+    # The check run keeps the job id as its name: the README's live Trivy
+    # badge (org-sync `trivy`) filters check runs on `trivy-config`.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # Visibility only: a scanner or upload failure never blocks a PR; the
+    # blocking config gate is test/run.sh's `security` stage.
+    continue-on-error: true
+    permissions:
+      contents: read
+      security-events: write   # SARIF upload
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Trivy config scan (SARIF, non-blocking)
+        run: |
+          # One pin, test/run.sh's (publish-images.yml repeats it): read it there.
+          trivy=$(sed -n 's/^TRIVY=//p' test/run.sh)
+          case "$trivy" in *@sha256:*) ;; *) echo "::error::no digest-pinned TRIVY= in test/run.sh"; exit 1 ;; esac
+          # Trivy runs as root: write through stdout so the runner owns the file.
+          docker run --rm -v "$PWD:/repo:ro" "$trivy" config --quiet \
+            --severity CRITICAL,HIGH --ignorefile /repo/.trivyignore \
+            --exit-code 0 --format sarif /repo > trivy-config.sarif
+      - name: Upload to code scanning
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: trivy-config.sarif
+          category: trivy-config

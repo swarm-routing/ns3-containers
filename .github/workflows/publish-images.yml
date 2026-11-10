@@ -20,7 +20,8 @@ name: Publish images
 #            the image that build produced -- never a rebuild, never a tag
 #   promote  an image whose tests passed gets its versioned and -<sha7> tags
 #            by `imagetools create` from that same digest (a carbon copy, no
-#            rebuild), then is signed and attested by digest
+#            rebuild), then is signed and attested by digest; a
+#            non-blocking Trivy CVE report of that digest goes to code scanning
 #   latest   the latest-* tags move last, only when every required image of
 #            the run passed (Alpine is experimental: it never blocks)
 #
@@ -30,6 +31,7 @@ name: Publish images
 #
 #   push to main (docker/, test/, tools/, this file)  supported release: build + test + promote
 #   pull request (same paths)                          supported release: build + test
+#   pull request (any other change)                    nothing built: resolve yields an empty matrix
 #   schedule (weekly)                                  supported release, only if not yet published
 #   workflow_dispatch                                  `versions` (any release, on demand), else
 #                                                      the supported release; promote on main
@@ -52,12 +54,16 @@ name: Publish images
 # candidates-cleanup.yml sweeps leftovers after 7 days and the cache's
 # untagged versions daily. The only
 # workflow artifacts are one-line digest/pass markers, kept 1 day.
+#
+# The one check to require on main is `images gate`: the workflow runs on
+# every pull request, so the gate always reports; it passes when every job
+# passed or was skipped (a PR outside the image paths builds nothing) and
+# fails on any failure or cancellation.
 on:
   push:
     branches: [main]
     paths: ['docker/**', 'test/**', 'tools/**', '.github/workflows/publish-images.yml']
   pull_request:
-    paths: ['docker/**', 'test/**', 'tools/**', '.github/workflows/publish-images.yml']
   schedule:
     - cron: '17 3 * * 1'   # Mondays 03:17 UTC: pick up new ns-3 releases
   workflow_dispatch:
@@ -99,7 +105,27 @@ jobs:
       count: ${{ steps.m.outputs.count }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      # A pull request builds only when it touches what goes into an image or
+      # its tests (the paths push to main filters on); any other PR gets an
+      # empty matrix, so every job below skips and the gate passes.
+      - name: What changed
+        id: changes
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          images=true
+          if [ "$EVENT" = pull_request ]; then
+            # --no-renames: a file moved out of an image path counts by its old name too.
+            files=$(git diff --name-only --no-renames "$BASE" HEAD)
+            printf 'changed:\n%s\n' "$files"
+            printf '%s\n' "$files" | grep -qE '^(docker|test|tools)/|^\.github/workflows/publish-images\.yml$' || images=false
+          fi
+          echo "images=$images" >> "$GITHUB_OUTPUT"
       - name: Test the matrix generator
+        if: steps.changes.outputs.images == 'true'
         run: python3 -m unittest discover -s tools -v
       - name: Generate the matrix from upstream tags
         id: m
@@ -107,12 +133,18 @@ jobs:
           VERSIONS: ${{ inputs.versions }}
           REFRESH: ${{ inputs.refresh == true }}
           MISSING_ONLY: ${{ github.event_name == 'schedule' }}
+          IMAGES: ${{ steps.changes.outputs.images }}
         run: |
           args=(--sha "$GITHUB_SHA" --image "$IMAGE")
           [ -n "$VERSIONS" ] && args+=(--versions "$VERSIONS")
           [ "$REFRESH" = true ] && args+=(--tier latest)
           [ "$MISSING_ONLY" = true ] && args+=(--missing-only)
-          matrix=$(python3 tools/ns3_matrix.py "${args[@]}")
+          if [ "$IMAGES" = true ]; then
+            matrix=$(python3 tools/ns3_matrix.py "${args[@]}")
+          else
+            matrix='{"include": []}'
+            echo "no image path changed: nothing to build" >> "$GITHUB_STEP_SUMMARY"
+          fi
           count=$(printf '%s' "$matrix" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["include"]))')
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
           echo "count=$count" >> "$GITHUB_OUTPUT"
@@ -262,6 +294,7 @@ jobs:
       packages: write
       id-token: write      # keyless cosign signature + provenance
       attestations: write
+      security-events: write   # the CVE report of the promoted digest (code scanning)
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.resolve.outputs.matrix) }}
@@ -389,6 +422,29 @@ jobs:
             --certificate-oidc-issuer https://token.actions.githubusercontent.com \
             "${IMAGE}@${DIGEST}" > /dev/null
           echo "signature verified for \`$IDENTITY\`" >> "$GITHUB_STEP_SUMMARY"
+      # Visibility only, after the image is published: the CVEs Trivy knows of
+      # in the promoted digest go to code scanning, one category per image, so
+      # vulnerabilities disclosed after the build show up there. The gate is
+      # test/run.sh's security stage (fixable MEDIUM+ blocks the promotion);
+      # this scan never fails the job, never blocks latest-*, and scans the
+      # same digest that was tested and tagged (no rebuild, no pull).
+      - name: CVE report of the promoted digest (Trivy, non-blocking)
+        continue-on-error: true
+        env:
+          DIGEST: ${{ steps.gate.outputs.digest }}
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Trivy runs as root: write through stdout so the runner owns the file.
+          docker run --rm -e TRIVY_USERNAME -e TRIVY_PASSWORD "$TRIVY" image --quiet \
+            --image-src remote --scanners vuln --ignore-unfixed --severity CRITICAL,HIGH \
+            --exit-code 0 --format sarif "${IMAGE}@${DIGEST}" > trivy-image.sarif
+      - name: Upload the CVE report to code scanning
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: trivy-image.sarif
+          category: trivy-image-${{ matrix.name }}
 
   latest:
     name: move latest-*
@@ -503,3 +559,27 @@ jobs:
               exit 1
             fi
           fi
+
+  # The one check to require in branch protection (as AntHocNet's CI gate):
+  # passes when every job above passed or was skipped (a PR outside the
+  # image paths, or the main-only jobs on a PR), fails on any failure or
+  # cancellation. Experimental legs (Alpine) are continue-on-error, so their
+  # failure never reaches it.
+  gate:
+    name: images gate
+    if: always()
+    needs: [resolve, build, test, promote, latest, discard]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          printf '%s\n' "$NEEDS" | python3 -c '
+          import json, sys
+          needs = json.load(sys.stdin)
+          bad = {k: v["result"] for k, v in needs.items() if v["result"] not in ("success", "skipped")}
+          for k, v in sorted(needs.items()):
+              print("%9s  %s" % (v["result"], k))
+          sys.exit(f"images gate: {bad}" if bad else 0)
+          '

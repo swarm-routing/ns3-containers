@@ -54,11 +54,19 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Acquire::Retries=0: the base's own apt does the download that installs the
 # fix, and CVE-2026-109518 (apt, hard-link reuse) needs a non-zero retry count
 # to be exploited over HTTP (Ubuntu's advisory; the default is 3 since Ubuntu
-# 22.04 / Debian 12). A transient mirror error now fails the build instead.
+# 22.04 / Debian 12). So the update fails hard on any fetch error
+# (--error-on=any; without it a failed index is only a warning and the install
+# fails minutes later with "has no installation candidate") and only the update
+# is retried, by the shell: 3 attempts, 10 s then 20 s apart. apk refetches its
+# index inside each --no-cache command, so it has no update step to retry.
 ARG REFRESH=none
 RUN echo "package refresh: ${REFRESH}" \
  && if command -v apt-get >/dev/null; then \
-        apt-get -o Acquire::Retries=0 update \
+        for delay in 10 20 0; do \
+            apt-get -o Acquire::Retries=0 update --error-on=any && break; \
+            [ "${delay}" -gt 0 ] || exit 1; \
+            echo "apt-get update failed; retrying in ${delay} s" >&2; sleep "${delay}"; \
+        done \
      && apt-get -o Acquire::Retries=0 upgrade -y --no-install-recommends \
      && apt-get -o Acquire::Retries=0 install -y --no-install-recommends \
             ca-certificates git g++ cmake ninja-build python3 make \
@@ -68,6 +76,17 @@ RUN echo "package refresh: ${REFRESH}" \
      && apk add --no-cache bash ca-certificates git g++ cmake samurai python3 make linux-headers; \
     else echo "unsupported base image" >&2; exit 1; fi
 
+# The clone target must not exist yet, so WORKDIR comes after the clone.
+RUN git clone --depth 1 --branch "ns-${NS3_VERSION}" \
+        https://gitlab.com/nsnam/ns-3-dev.git /opt/ns-3 \
+ && rm -rf /opt/ns-3/.git
+
+WORKDIR /opt/ns-3
+
+# ${flags} is unquoted on purpose: it holds one or two configure options
+# ("-d debug --enable-sanitizers") that must split into separate words, as
+# ns3-build-contrib splits NS3_PROFILE_FLAGS.
+# hadolint ignore=SC2086
 RUN case "${BUILD_PROFILE}" in \
         default)   flags="-d default" ;; \
         optimized) flags="-d release" ;; \
@@ -75,10 +94,6 @@ RUN case "${BUILD_PROFILE}" in \
         sanitized) flags="-d debug --enable-sanitizers" ;; \
         *) echo "unknown BUILD_PROFILE=${BUILD_PROFILE}" >&2; exit 1 ;; \
     esac \
- && git clone --depth 1 --branch "ns-${NS3_VERSION}" \
-        https://gitlab.com/nsnam/ns-3-dev.git /opt/ns-3 \
- && rm -rf /opt/ns-3/.git \
- && cd /opt/ns-3 \
  && printf 'NS3_VERSION=%s\nBUILD_PROFILE=%s\nNS3_PROFILE_FLAGS="%s"\nNS3_MODULES="%s"\n' \
         "${NS3_VERSION}" "${BUILD_PROFILE}" "${flags}" "${NS3_MODULES}" > .swarm-configure.env \
  && ./ns3 configure -G Ninja ${flags} --enable-examples --enable-tests \
