@@ -19,7 +19,7 @@ modules into the tree and builds them.
 
 ```
 docker/Dockerfile                 BASE_IMAGE x NS3_VERSION x BUILD_PROFILE image
-tools/ns3_matrix.py               supported release vs on-demand releases, base digests and tags (+ test_ns3_matrix.py)
+tools/ns3_matrix.py               supported release vs on-demand releases (`--tier latest`: the supported release only), base digests and tags (+ test_ns3_matrix.py)
 docker/gcovr-requirements.in      gcovr's pin for the debug/sanitized images; docker/gcovr-requirements.txt: its hashed lock (uv pip compile, command in the .in)
 docker/scripts/build-contrib.sh   -> /usr/local/bin/ns3-build-contrib (--strict-warnings / --coverage [--quality-modules] through swarm-quality.cmake, the contrib targets only; ns-3.43+ and 3.36-3.42 target names)
 test/run.sh                       every test stage against one image ref (the candidate digest in CI); `security` runs Trivy (pinned by digest) on the host
@@ -35,7 +35,7 @@ test/known-failures.txt           upstream bugs expected on one exact ns-3 versi
 test/fixtures/swarm-hello/        minimal contrib module (C++17..C++23) used by the smoke (GPL-2.0-only: an ns-3 module)
 test/fixtures/manet-canary/       short MANET program for the integration stage (GPL-2.0-only)
 test/fixtures/profile-probe/      one deliberate assert/log/memory bug per mode, for the profile stage (GPL-2.0-only)
-.github/workflows/publish-images.yml   resolve -> build once (candidate in ns3-dev-ci) -> test by digest -> promote = retag the same digest (main) -> sign -> attest -> CVE report to code scanning (non-blocking) -> latest-* -> discard this run's candidates (PRs too); weekly new release; `versions` = on demand; runs on every PR (other paths: empty matrix), `images gate` is the check to require
+.github/workflows/publish-images.yml   resolve -> build once (candidate in ns3-dev-ci) -> test by digest -> promote = retag the same digest (main) -> sign -> attest -> CVE report to code scanning (non-blocking) -> latest-* -> discard this run's candidates (PRs too); weekly new release; `versions` = on demand; `refresh` = OS security refresh of the supported release (REFRESH=<run id>, --tier latest); runs on every PR (other paths: empty matrix), `images gate` is the check to require
 .github/workflows/container-security.yml   every push/PR: hadolint (gate) and a Trivy config scan, both as SARIF to code scanning (the image CVE report is in publish-images' promote job)
 .github/workflows/pr-title.yml         the PR title is a lowercase Conventional Commit (reusable-pr-title.yml)
 .github/workflows/candidates-cleanup.yml   daily: ns3-dev-ci candidates left by failed runs (> 7 days), untagged ns3-dev-cache versions (> 1 day); never ns3-dev
