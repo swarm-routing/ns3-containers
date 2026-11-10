@@ -24,6 +24,12 @@
 # its `shard <group> i/N` line (#86). The N shards of a group must list every
 # module of the group exactly once; if they do not, the stage fails before it
 # builds anything, so no suite is ever silently dropped.
+#
+# UNIT_PR=1 marks a pull-request run: the suites on test/ns3-suites.txt's
+# `main-only` line are left out of test.py's list, and the stage says which
+# (a SKIP line per suite, and in the group line the step summary shows).
+# Unset, every suite of the group runs, as on main, schedule and dispatch
+# runs, where the image is promoted (ns3-containers#86, #87).
 # Suites listed for this exact ns-3 version in test/known-failures.txt
 # (`unit:<suite>`) must fail; any other failure fails the stage.
 set -uo pipefail
@@ -72,6 +78,13 @@ if [ -n "${UNIT_SHARD:-}" ]; then
     mods=$shard_mods
     why="$why, shard $UNIT_SHARD"
 fi
+deferred=""
+case "${UNIT_PR:-}" in
+    "") ;;
+    1) deferred=$(awk '{sub(/#.*/, "")} $1 == "main-only" {$1=""; print}' /src/test/ns3-suites.txt | xargs)
+       [ -z "$deferred" ] || why="$why; pull request: $deferred deferred to main" ;;
+    *) echo "unit: UNIT_PR must be 1 or unset, not '$UNIT_PR'" >&2; exit 2 ;;
+esac
 echo "unit: $group group ($why): $mods"
 
 if ./ns3 configure --help 2>/dev/null | grep -q -- --filter-module-examples-and-tests; then
@@ -86,6 +99,35 @@ fi
 start=$(date +%s)
 ./ns3 build >/tmp/build.log 2>&1 || { tail -40 /tmp/build.log; echo "unit: build failed" >&2; exit 1; }
 echo "unit: test libraries built in $(( $(date +%s) - start )) s"
+
+if [ -n "$deferred" ]; then
+    # test.py has no exclude option: it runs what the test runner's
+    # --print-test-name-list prints. In this throwaway container the runner
+    # is wrapped so that list leaves the deferred suites out.
+    mapfile -t runners < <(find build/utils -maxdepth 1 -type f -name '*test-runner*' ! -name '*.real')
+    [ ${#runners[@]} -eq 1 ] || { echo "unit: expected one test runner in build/utils, found ${#runners[@]}" >&2; exit 1; }
+    runner=${runners[0]}
+    tr ' ' '\n' <<<"$deferred" >/tmp/unit-deferred.txt
+    for s in $deferred; do
+        if "$runner" --print-test-name-list | grep -qxF "$s"; then
+            echo "  SKIP  unit:$s: deferred to main on pull requests (main-only in test/ns3-suites.txt, #86)"
+        else
+            echo "  SKIP  unit:$s: main-only in test/ns3-suites.txt, but not a suite of this build"
+        fi
+    done
+    mv "$runner" "$runner.real"
+    cat >"$runner" <<'EOF'
+#!/usr/bin/env bash
+# Written by test/unit.sh on a pull request: leaves the main-only suites out of the suite list.
+if [[ " $* " == *" --print-test-name-list "* ]]; then
+    "$0.real" "$@" | { grep -vxF -f /tmp/unit-deferred.txt || true; }
+    exit "${PIPESTATUS[0]}"
+fi
+exec "$0.real" "$@"
+EOF
+    chmod +x "$runner"
+    echo "unit: deferred to main (UNIT_PR=1): $deferred; every push to main runs them before it promotes the image"
+fi
 
 start=$(date +%s)
 ./test.py --no-build --nocolor --duration -c unit -f QUICK >/tmp/test.log 2>&1

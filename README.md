@@ -229,6 +229,18 @@ and sanitized image), before the digest is promoted. The workflow sets
 as a local run, a schedule or a dispatch does.
 The step summary says which set ran and why.
 
+**Some suites run on `main` only (#86, maintainer decision (c)).** On a pull
+request (`UNIT_PR=1`, set by the workflow) every image's unit stage leaves
+out the suites on the `main-only` line of
+[`test/ns3-suites.txt`](test/ns3-suites.txt), whatever its group. Today that
+is `ns3-tcp-cubic` (internet, so in both groups): one upstream suite that
+took 1343–1936 s under ASan+UBSan, 470 s on `debug` and 348 of the 350 s of
+`test.py` on the light Debian images, and so set both the sanitized job's
+wall time and most of a PR run's runner minutes. The job log and the step
+summary name each deferred suite (a SKIP note). Pushes to `main`, schedule
+and dispatch runs, and any run without `UNIT_PR`, run it; promotion happens
+only on `main`, so every published image is still tested with it.
+
 [`test/known-failures.txt`](test/known-failures.txt) lists upstream ns-3 bugs
 expected on one exact ns-3 version; each shows in the step summary as XFAIL,
 and an expected failure that passes fails the stage. Today:
