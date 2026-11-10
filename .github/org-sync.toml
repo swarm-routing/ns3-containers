@@ -49,3 +49,6 @@ ruleset = "tooling"
 # build/test jobs: those run only on docker/**, test/**, tools/** changes, and a required
 # check that does not run blocks the PR.
 required_checks = ["check / org-sync", "headers / licence", "images gate", "title / title"]
+# Merge through a merge queue (swarm-routing/.github#130); every workflow behind a required
+# check also runs on merge_group.
+merge_queue = true
