@@ -3,7 +3,8 @@
 #   <group> <module> ...
 #
 # `full` runs on the debug and sanitized images (what CI consumes; asserts on),
-# `light` on default and optimized. The MANET stack the org's protocols use is
+# `light` on default and optimized. UNIT_SET=full|light overrides the profile:
+# on pull requests the Debian, slim and Alpine images run `light` (#87). The MANET stack the org's protocols use is
 # in `full`: core, network, internet, mobility, wifi, propagation, the routing
 # models (aodv, olsr, dsdv) and mesh (in NS3_MODULES).
 full  core network internet mobility wifi propagation aodv olsr dsdv mesh

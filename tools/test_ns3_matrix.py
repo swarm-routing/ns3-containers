@@ -90,6 +90,16 @@ class Supported(unittest.TestCase):
         (e,) = [e for e in self.mx if e["name"] == "3.49-default"]
         self.assertEqual(e["cache"], "3.49-ubuntu-default")
 
+    def test_pr_unit_set(self):
+        # #87: on PRs the OS variants run the light unit group; Ubuntu keeps its profile's group.
+        got = {e["name"]: e["pr_unit_set"] for e in self.mx}
+        for name, unit_set in got.items():
+            self.assertEqual(unit_set, "" if name.count("-") == 1 else "light", name)
+        self.assertEqual(got["3.49-sanitized"], "")
+        self.assertEqual(got["3.49-debug"], "")
+        self.assertEqual(got["3.49-debian-debug"], "light")
+        self.assertEqual(got["3.49-alpine-debug"], "light")
+
 
 class OnDemand(unittest.TestCase):
     """--versions builds any upstream release by hand (ubuntu x default, debug)."""

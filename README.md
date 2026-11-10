@@ -167,7 +167,7 @@ passes its matrix entry and commit):
 
 | `integration` | ns-3 actually simulates: the tutorial `first`; the routing modules' own examples `aodv-example` (must deliver), `dsdv-manet` and `olsr-hna` (must deliver); and [`manet-canary`](test/fixtures/manet-canary/) (16 nodes, random waypoint) with AODV, OLSR and DSDV, dense (must deliver) and sparse (partitioned), each under a wall-clock budget: a run that does not finish is a hang |
 
-| `unit` | ns-3's own QUICK unit suites (`test.py -c unit -f QUICK`) for the modules in [`test/ns3-suites.txt`](test/ns3-suites.txt): the MANET stack (core, network, internet, mobility, wifi, propagation, aodv, olsr, dsdv, mesh) on `debug` and `sanitized`, core/network/internet on `default` and `optimized`; their test libraries are built in the throwaway container |
+| `unit` | ns-3's own QUICK unit suites (`test.py -c unit -f QUICK`) for the modules in [`test/ns3-suites.txt`](test/ns3-suites.txt): the MANET stack (core, network, internet, mobility, wifi, propagation, aodv, olsr, dsdv, mesh, the `full` group) on `debug` and `sanitized`, core/network/internet (`light`) on `default` and `optimized`; `UNIT_SET=full\|light` overrides the profile's group. Their test libraries are built in the throwaway container. Every suite's time is in the job log, the 15 slowest in the step summary |
 
 Unit-stage cost per image (ns-3.49, GitHub-hosted runner, measured in #51's run):
 
@@ -184,6 +184,18 @@ Unit-stage cost per image (ns-3.49, GitHub-hosted runner, measured in #51's run)
 | `3.49-slim` | light | 134 | 251 s | 90 s |
 
 The sanitized image's unit stage (~55 min) sets the length of a pipeline run.
+
+**Pull requests run a smaller unit set (#87).** On a pull request the
+Debian, slim and Alpine images run the `light` group: they differ from
+Ubuntu's only in the base OS, and the `full` group on all three cost about
+40 runner-minutes per PR run. Ubuntu `debug` and `sanitized` still run
+`full` on every PR. A PR never tags anything: every push to `main` runs every
+stage on every image, each with its profile's group (`full` on every debug
+and sanitized image), before the digest is promoted. The workflow sets
+`UNIT_SET` from the event and the matrix entry (`pr_unit_set` in
+`tools/ns3_matrix.py`); `test/run.sh` without it runs the profile's group,
+as a local run, a schedule or a dispatch does.
+The step summary says which set ran and why.
 
 [`test/known-failures.txt`](test/known-failures.txt) lists upstream ns-3 bugs
 expected on one exact ns-3 version; each shows in the step summary as XFAIL,

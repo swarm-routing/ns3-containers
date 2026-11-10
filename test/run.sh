@@ -18,6 +18,11 @@
 # are passed to the stages that compare against them; unset, those
 # comparisons are skipped and say so.
 #
+# UNIT_SET=full|light picks the unit stage's group in test/ns3-suites.txt;
+# unset (a local run, a push to main, a schedule or dispatch run), the
+# profile picks it (test/unit.sh). The pipeline sets it to `light` only on a
+# pull request, for the Debian, slim and Alpine images (ns3-containers#87).
+#
 # The same stages run for every image the pipeline builds: the supported
 # release and on-demand older releases alike (ns3-containers#36). A stage that
 # cannot apply to a release says SKIP (<reason>); it never passes silently.
@@ -29,7 +34,11 @@ repo=$(cd "$(dirname "$0")/.." && pwd)
 summary=${GITHUB_STEP_SUMMARY:-/dev/null}
 
 notes=$(mktemp)
+times=$(mktemp)
 print_notes() {
+    if [ -s "$times" ]; then
+        { echo; echo "Slowest unit suites (s):"; echo; echo '```'; cat "$times"; echo '```'; } >> "$summary"
+    fi
     [ -s "$notes" ] || return 0
     { echo; echo "Notes (expected failures and skips):"; echo; sed 's/^/- /' "$notes"; } >> "$summary"
 }
@@ -47,6 +56,7 @@ stage() {
     set -e
     echo "::endgroup::"
     grep -E '^ *(XFAIL|SKIP) ' "$out" | sed "s/^ */[$name] /" >> "$notes" || true
+    grep -E '^ *TIME ' "$out" | head -15 | sed 's/^ *TIME *//' >> "$times" || true
     rm -f "$out"
     local took=$(( $(date +%s) - start ))
     if [ "$rc" -eq 0 ]; then
@@ -62,7 +72,7 @@ stage() {
 in_image() {
     docker run --rm -v "$repo:/src:ro" \
         -e EXPECT_VERSION="${EXPECT_VERSION:-}" -e EXPECT_PROFILE="${EXPECT_PROFILE:-}" \
-        -e EXPECT_OS="${EXPECT_OS:-}" "$image" "$@"
+        -e EXPECT_OS="${EXPECT_OS:-}" -e UNIT_SET="${UNIT_SET:-}" "$image" "$@"
 }
 
 # OCI labels, read from the image config on the runner (ns3-containers#39).
@@ -129,6 +139,12 @@ security() {
 
 {
     echo "### Tests on \`$image\`"
+    echo
+    if [ -n "${UNIT_SET:-}" ]; then
+        echo "Unit set: \`$UNIT_SET\` (UNIT_SET; the pipeline sets \`light\` on pull requests for the Debian, slim and Alpine images)"
+    else
+        echo "Unit set: the profile's group (\`full\` on debug and sanitized, \`light\` on default and optimized)"
+    fi
     echo
     echo "| Stage | Result | Time |"
     echo "|---|---|---|"

@@ -26,11 +26,17 @@ name: Publish images
 #            the run passed (Alpine is experimental: it never blocks)
 #
 # Automatic and on-demand builds go through the same jobs and the same tests
-# (ns3-containers#36). A fork PR cannot push a candidate: its build job loads
+# (ns3-containers#36). One exception, on pull requests only (#87): the
+# Debian, slim and Alpine images run the `light` unit group (UNIT_SET, from
+# the matrix entry's pr_unit_set); Ubuntu debug and sanitized keep `full`. A
+# PR never tags, and every push to main runs every stage with each image's
+# full profile group before it promotes the digest. A fork PR cannot push a candidate: its build job loads
 # the image and runs the same test/run.sh on it in place.
 #
 #   push to main (docker/, test/, tools/, this file)  supported release: build + test + promote
-#   pull request (same paths)                          supported release: build + test
+#   pull request (same paths)                          supported release: build + test; the
+#                                                      Debian, slim and Alpine images run the
+#                                                      `light` unit group (UNIT_SET, #87)
 #   pull request (any other change)                    nothing built: resolve yields an empty matrix
 #   schedule (weekly)                                  supported release, only if not yet published
 #   workflow_dispatch                                  `versions` (any release, on demand), else
@@ -211,6 +217,7 @@ jobs:
           EXPECT_OS: ${{ matrix.os }}
           EXPECT_REVISION: ${{ github.sha }}
           EXPECT_BUILD_RUN: ${{ github.run_id }}-${{ github.run_attempt }}
+          UNIT_SET: ${{ github.event_name == 'pull_request' && matrix.pr_unit_set || '' }}
         run: test/run.sh "ns3-dev-local:${NAME}"
 
   test:
@@ -257,6 +264,8 @@ jobs:
           EXPECT_OS: ${{ matrix.os }}
           EXPECT_REVISION: ${{ github.sha }}
           EXPECT_BUILD_RUN: ${{ steps.pull.outputs.build_run }}
+          # Pull requests only: the OS variants run the light unit group (#87).
+          UNIT_SET: ${{ github.event_name == 'pull_request' && matrix.pr_unit_set || '' }}
         run: test/run.sh "$REF"
       - name: Mark as passed
         run: mkdir -p pass && cp marker/digest pass/digest

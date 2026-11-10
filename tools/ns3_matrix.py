@@ -36,6 +36,12 @@ An entry's `tags` are set when its image passes its tests; its `latest_tags`
 (empty except for the supported release) move last, once every required image
 of the run has passed (publish-images.yml).
 
+An entry's `pr_unit_set` is the unit group its tests run on a pull request:
+`light` for the Debian, slim and Alpine images (they differ from Ubuntu's
+only in the base OS; Ubuntu's debug and sanitized keep `full`), empty for
+Ubuntu (the profile's group). Pushes to main, schedule and dispatch runs
+ignore it and run every image's profile group (ns3-containers#87).
+
 --missing-only keeps only versions whose plain :<full-version> tag is not yet
 published (anonymous GHCR check): the scheduled run builds a new release once.
 """
@@ -132,6 +138,7 @@ def entries(chosen, newest_full, sha7=""):
                 "cache": f"{minor}-{os_}-{profile}",
                 "tags": " ".join(tags),
                 "latest_tags": " ".join(latest),
+                "pr_unit_set": "" if os_ == "ubuntu" else "light",
             })
     return out
 
