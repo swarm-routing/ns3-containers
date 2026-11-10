@@ -109,7 +109,7 @@ if [ -n "$deferred" ]; then
     runner=${runners[0]}
     tr ' ' '\n' <<<"$deferred" >/tmp/unit-deferred.txt
     for s in $deferred; do
-        if "$runner" --print-test-name-list | grep -qxF "$s"; then
+        if "$runner" --print-test-name-list | grep -xF "$s" >/dev/null; then  # not -q: an early exit SIGPIPEs the runner
             echo "  SKIP  unit:$s: deferred to main on pull requests (main-only in test/ns3-suites.txt, #86)"
         else
             echo "  SKIP  unit:$s: main-only in test/ns3-suites.txt, but not a suite of this build"
