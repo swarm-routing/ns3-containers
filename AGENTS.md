@@ -23,6 +23,7 @@ tools/ns3_matrix.py               supported release vs on-demand releases, base 
 docker/scripts/build-contrib.sh   -> /usr/local/bin/ns3-build-contrib (--strict-warnings / --coverage [--quality-modules] through swarm-quality.cmake, the contrib targets only; ns-3.43+ and 3.36-3.42 target names)
 test/run.sh                       every test stage against one image ref (the candidate digest in CI); `security` runs Trivy (pinned by digest) on the host
 .trivyignore                      accepted Dockerfile findings, each with its reason (the vuln and secret scans take none)
+.hadolint.yaml                    hadolint settings: failure at warning, apt/apk version pinning (DL3008/DL3018) ignored, trusted registries
 test/structure.sh                 image contract: tree, tools, env, configure record, CMake cache vs profile, C++ standard
 test/profile.sh                   the profile keeps its promise: asserts/logs on or off, sanitizers catch planted bugs, no AVX
 test/smoke.sh                     image smoke (incremental build + test.py + guards; --strict-warnings catches a planted -Wshadow in a source and in an own header reached through ns3/, --quality-modules leaves a dependency unjudged, --coverage instruments the module only)
@@ -33,7 +34,8 @@ test/known-failures.txt           upstream bugs expected on one exact ns-3 versi
 test/fixtures/swarm-hello/        minimal contrib module (C++17..C++23) used by the smoke (GPL-2.0-only: an ns-3 module)
 test/fixtures/manet-canary/       short MANET program for the integration stage (GPL-2.0-only)
 test/fixtures/profile-probe/      one deliberate assert/log/memory bug per mode, for the profile stage (GPL-2.0-only)
-.github/workflows/publish-images.yml   resolve -> build once (candidate in ns3-dev-ci) -> test by digest -> promote = retag the same digest (main) -> sign -> attest -> latest-* -> discard this run's candidates (PRs too); weekly new release; `versions` = on demand; runs on every PR (other paths: empty matrix), `images gate` is the check to require
+.github/workflows/publish-images.yml   resolve -> build once (candidate in ns3-dev-ci) -> test by digest -> promote = retag the same digest (main) -> sign -> attest -> CVE report to code scanning (non-blocking) -> latest-* -> discard this run's candidates (PRs too); weekly new release; `versions` = on demand; runs on every PR (other paths: empty matrix), `images gate` is the check to require
+.github/workflows/container-security.yml   every push/PR: hadolint (gate) and a Trivy config scan, both as SARIF to code scanning (the image CVE report is in publish-images' promote job)
 .github/workflows/pr-title.yml         the PR title is a lowercase Conventional Commit (reusable-pr-title.yml)
 .github/workflows/candidates-cleanup.yml   daily: ns3-dev-ci candidates left by failed runs (> 7 days), untagged ns3-dev-cache versions (> 1 day); never ns3-dev
 .github/workflows/licence.yml     licence headers (tooling MIT OR GPL-2.0-only, rest GPL-2.0-only)
@@ -48,6 +50,7 @@ docker build -f docker/Dockerfile --build-arg NS3_VERSION=3.48 \
     --build-arg BUILD_PROFILE=debug -t ns3-dev:3.48-debug .        # ~8-15 min on 4 cores
 EXPECT_VERSION=3.48 EXPECT_PROFILE=debug EXPECT_OS=ubuntu \
     test/run.sh ns3-dev:3.48-debug                                 # every test stage, as CI runs them
+hadolint docker/Dockerfile                                       # reads .hadolint.yaml; exit 0 required
 shellcheck docker/scripts/build-contrib.sh test/*.sh
 actionlint .github/workflows/*.yml
 ```

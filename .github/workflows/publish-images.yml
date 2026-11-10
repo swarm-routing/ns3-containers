@@ -20,7 +20,8 @@ name: Publish images
 #            the image that build produced -- never a rebuild, never a tag
 #   promote  an image whose tests passed gets its versioned and -<sha7> tags
 #            by `imagetools create` from that same digest (a carbon copy, no
-#            rebuild), then is signed and attested by digest
+#            rebuild), then is signed and attested by digest; a
+#            non-blocking Trivy CVE report of that digest goes to code scanning
 #   latest   the latest-* tags move last, only when every required image of
 #            the run passed (Alpine is experimental: it never blocks)
 #
@@ -279,6 +280,7 @@ jobs:
       packages: write
       id-token: write      # keyless cosign signature + provenance
       attestations: write
+      security-events: write   # the CVE report of the promoted digest (code scanning)
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.resolve.outputs.matrix) }}
@@ -406,6 +408,29 @@ jobs:
             --certificate-oidc-issuer https://token.actions.githubusercontent.com \
             "${IMAGE}@${DIGEST}" > /dev/null
           echo "signature verified for \`$IDENTITY\`" >> "$GITHUB_STEP_SUMMARY"
+      # Visibility only, after the image is published: the CVEs Trivy knows of
+      # in the promoted digest go to code scanning, one category per image, so
+      # vulnerabilities disclosed after the build show up there. The gate is
+      # test/run.sh's security stage (fixable MEDIUM+ blocks the promotion);
+      # this scan never fails the job, never blocks latest-*, and scans the
+      # same digest that was tested and tagged (no rebuild, no pull).
+      - name: CVE report of the promoted digest (Trivy, non-blocking)
+        continue-on-error: true
+        env:
+          DIGEST: ${{ steps.gate.outputs.digest }}
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Trivy runs as root: write through stdout so the runner owns the file.
+          docker run --rm -e TRIVY_USERNAME -e TRIVY_PASSWORD "$TRIVY" image --quiet \
+            --image-src remote --scanners vuln --ignore-unfixed --severity CRITICAL,HIGH \
+            --exit-code 0 --format sarif "${IMAGE}@${DIGEST}" > trivy-image.sarif
+      - name: Upload the CVE report to code scanning
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: trivy-image.sarif
+          category: trivy-image-${{ matrix.name }}
 
   latest:
     name: move latest-*
