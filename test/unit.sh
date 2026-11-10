@@ -81,7 +81,7 @@ fi
 deferred=""
 case "${UNIT_PR:-}" in
     "") ;;
-    1) deferred=$(awk '!/^#/ && $1 == "main-only" {$1=""; print}' /src/test/ns3-suites.txt | xargs)
+    1) deferred=$(awk '{sub(/#.*/, "")} $1 == "main-only" {$1=""; print}' /src/test/ns3-suites.txt | xargs)
        [ -z "$deferred" ] || why="$why; pull request: $deferred deferred to main" ;;
     *) echo "unit: UNIT_PR must be 1 or unset, not '$UNIT_PR'" >&2; exit 2 ;;
 esac
