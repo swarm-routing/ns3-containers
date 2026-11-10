@@ -38,3 +38,14 @@ test = """
 python3 -m unittest discover -s tools
 $(MAKE) build
 test/run.sh local/$(notdir $(CURDIR)):dev"""
+
+[settings]
+# GitHub settings as code: swarm-routing/.github tools/repo-settings (swarm-routing/.github#117).
+description = "Pre-built, tested ns-3 images for contrib-module CI: ghcr.io/swarm-routing/ns3-dev with the ns-3 tree configured and built: debug, sanitized, default and optimized profiles on Ubuntu, debug and default on Debian, debug on Alpine; signed and attested."
+homepage = "https://swarm-routing.github.io/arena/ns3-containers/"
+topics = ["ns-3", "docker", "container-images", "ghcr", "ci", "sanitizers", "network-simulation", "reproducibility", "cosign"]
+ruleset = "tooling"
+# Not the image pipeline's build/test jobs: publish-images.yml runs only on docker/**, test/**,
+# tools/** changes, and a required check that does not run blocks the PR. They need an
+# always-running gate job first. The PR-title check is added once this repository runs it (swarm-routing/.github#117).
+required_checks = ["check / org-sync", "headers / licence"]
