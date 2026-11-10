@@ -46,7 +46,11 @@ ENV DEBIAN_FRONTEND=noninteractive
 # (and -slim): gcc-14, CMake 3.31. alpine (experimental, musl): bash is needed
 # by ns3-build-contrib, samurai provides `ninja`. On debug and sanitized,
 # python3-venv (Debian/Ubuntu; Alpine's python3 carries venv) holds gcovr's
-# environment, installed below; default and optimized do not get it. Every ns-3 in the window
+# environment, installed below; default and optimized do not get it. On debug
+# only, unzip, curl and gnupg (the same names on Alpine): reusable-ns3-ci.yml's
+# SonarQube step, which runs on debug, downloads the scanner and checks its
+# signature with them, and installs them by apt only when they are missing
+# (ns3-containers#88). Every ns-3 in the window
 # (3.40-3.49) needs CMake >= 3.10..3.25 and C++17..C++23, all covered.
 # The base is pinned by digest (invariant 13) and can lag its distribution's
 # security archive by days, so the packages already in it are upgraded too
@@ -62,10 +66,11 @@ ENV DEBIAN_FRONTEND=noninteractive
 # is retried, by the shell: 3 attempts, 10 s then 20 s apart. apk refetches its
 # index inside each --no-cache command, so it has no update step to retry.
 ARG REFRESH=none
-# ${venv} is unquoted on purpose: empty on default and optimized, so no word.
+# ${venv} and ${sonar} are unquoted on purpose: empty, they make no word.
 # hadolint ignore=SC2086
 RUN echo "package refresh: ${REFRESH}" \
  && case "${BUILD_PROFILE}" in debug|sanitized) venv=python3-venv ;; *) venv="" ;; esac \
+ && case "${BUILD_PROFILE}" in debug) sonar="unzip curl gnupg" ;; *) sonar="" ;; esac \
  && if command -v apt-get >/dev/null; then \
         for delay in 10 20 0; do \
             apt-get -o Acquire::Retries=0 update --error-on=any && break; \
@@ -74,11 +79,11 @@ RUN echo "package refresh: ${REFRESH}" \
         done \
      && apt-get -o Acquire::Retries=0 upgrade -y --no-install-recommends \
      && apt-get -o Acquire::Retries=0 install -y --no-install-recommends \
-            ca-certificates git g++ cmake ninja-build python3 ${venv} make \
+            ca-certificates git g++ cmake ninja-build python3 ${venv} ${sonar} make \
      && rm -rf /var/lib/apt/lists/*; \
     elif command -v apk >/dev/null; then \
         apk upgrade --no-cache \
-     && apk add --no-cache bash ca-certificates git g++ cmake samurai python3 make linux-headers; \
+     && apk add --no-cache bash ca-certificates git g++ cmake samurai python3 make linux-headers ${sonar}; \
     else echo "unsupported base image" >&2; exit 1; fi
 
 # The clone target must not exist yet, so WORKDIR comes after the clone.

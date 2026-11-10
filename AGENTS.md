@@ -25,7 +25,7 @@ docker/scripts/build-contrib.sh   -> /usr/local/bin/ns3-build-contrib (--strict-
 test/run.sh                       every test stage against one image ref (the candidate digest in CI); `security` runs Trivy (pinned by digest) on the host
 .trivyignore                      accepted Dockerfile findings, each with its reason (the vuln and secret scans take none)
 .hadolint.yaml                    hadolint settings: failure at warning, apt/apk version pinning (DL3008/DL3018) ignored, trusted registries
-test/structure.sh                 image contract: tree, tools, env, configure record, CMake cache vs profile, C++ standard, gcovr on debug/sanitized
+test/structure.sh                 image contract: tree, tools, env, configure record, CMake cache vs profile, C++ standard, gcovr on debug/sanitized, unzip/curl/gpg on debug
 test/profile.sh                   the profile keeps its promise: asserts/logs on or off, sanitizers catch planted bugs, no AVX
 test/smoke.sh                     image smoke (incremental build + test.py + guards; --strict-warnings catches a planted -Wshadow in a source and in an own header reached through ns3/, --quality-modules leaves a dependency unjudged, --coverage instruments the module only, the image's gcovr reports it)
 test/integration.sh               ns-3 simulates: tutorial `first` + manet-canary AODV/OLSR/DSDV dense/sparse under a wall-clock budget

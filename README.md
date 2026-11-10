@@ -67,6 +67,11 @@ with SIGILL on another CPU.
 CI that should track ns-3 uses `latest-debug` / `latest-sanitized`; anything
 that produces a published number pins a versioned `-<sha7>` tag.
 
+CI tools: the `debug` and `sanitized` images carry `gcovr` (pinned, see
+`--coverage` below); `debug` also carries `unzip`, `curl` and `gnupg`, which
+the org's `reusable-ns3-ci.yml` SonarQube step uses to fetch and verify the
+scanner (#88). Both steps install them by apt only when they are missing.
+
 Toolchains: Ubuntu 24.04 gcc-13 / CMake 3.28; Debian 13 gcc-14 / CMake 3.31;
 each tree builds in its own C++ standard (ns-3's `CMAKE_CXX_STANDARD_MINIMUM`:
 C++17 for 3.40, C++20 for 3.41–3.45, C++23 from 3.46; the structure test reads
@@ -162,7 +167,7 @@ passes its matrix entry and commit):
 | Stage | Checks |
 |---|---|
 | `labels` | the OCI labels: source, licence, ns-3 version, profile, base, revision |
-| `structure` | `/opt/ns-3` configured and built, `ns3-build-contrib` on `PATH`, the environment, the recorded configure line and module list (equal to the Dockerfile's, every module built), the CMake cache matching the profile (build type, asserts, logs, sanitizers, no native optimizations, examples and tests on), the C++ standard the tree requires, `gcovr` at its pinned version on `debug` and `sanitized` |
+| `structure` | `/opt/ns-3` configured and built, `ns3-build-contrib` on `PATH`, the environment, the recorded configure line and module list (equal to the Dockerfile's, every module built), the CMake cache matching the profile (build type, asserts, logs, sanitizers, no native optimizations, examples and tests on), the C++ standard the tree requires, `gcovr` at its pinned version on `debug` and `sanitized`, `unzip`, `curl` and `gpg` on `debug` |
 | `profile` | the profile does what its name says: asserts abort and `NS_LOG` prints (`default`, `debug`, `sanitized`) or both are compiled out (`optimized`); on `sanitized`, a planted use-after-free, leak and signed overflow are each reported by ASan, LSan and UBSan; no AVX/AVX-512 instruction in the stock core library (nothing built for the build machine's CPU) |
 | `smoke` | builds `test/fixtures/swarm-hello`, runs its test.py suite, fails above 40 Ninja steps (the warm cache was missed); `--strict-warnings`, `--quality-modules` and `--coverage` do what they promise, and the image's `gcovr` reports the module's coverage |
 

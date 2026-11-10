@@ -136,6 +136,18 @@ case "${BUILD_PROFILE:-}" in
         fi ;;
 esac
 
+if [ "${BUILD_PROFILE:-}" = debug ]; then
+    echo "structure: SonarQube scan tools (debug: unzip, curl, gpg; ns3-containers#88)"
+    for tool in unzip curl gpg; do
+        # unzip has no --version; -v prints its version and exits 0.
+        if "$tool" --version >/dev/null 2>&1 || "$tool" -v >/dev/null 2>&1; then
+            ok "$tool runs"
+        else
+            bad "$tool missing or does not run: reusable-ns3-ci's sonar step would fall back to apt"
+        fi
+    done
+fi
+
 echo "structure: C++ standard and compiler"
 macros="$NS3/build-support/macros-and-definitions.cmake"
 need=$(grep -oE 'set\(CMAKE_CXX_STANDARD_MINIMUM [0-9]+' "$macros" 2>/dev/null | grep -oE '[0-9]+$' | head -1)
