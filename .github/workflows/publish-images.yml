@@ -106,7 +106,8 @@ jobs:
         run: |
           images=true
           if [ "$EVENT" = pull_request ]; then
-            files=$(git diff --name-only "$BASE" HEAD)
+            # --no-renames: a file moved out of an image path counts by its old name too.
+            files=$(git diff --name-only --no-renames "$BASE" HEAD)
             printf 'changed:\n%s\n' "$files"
             printf '%s\n' "$files" | grep -qE '^(docker|test|tools)/|^\.github/workflows/publish-images\.yml$' || images=false
           fi
