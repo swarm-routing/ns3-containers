@@ -19,6 +19,11 @@
 # (ns3-containers#87); a push to main and any run without UNIT_SET run the
 # profile's group. Every suite's time is printed (`TIME <s> <suite>`, slowest
 # first) so the stage's cost can be split on measured numbers (#86).
+#
+# UNIT_SHARD=i/N runs shard i of N: the modules test/ns3-suites.txt lists on
+# its `shard <group> i/N` line (#86). The N shards of a group must list every
+# module of the group exactly once; if they do not, the stage fails before it
+# builds anything, so no suite is ever silently dropped.
 # Suites listed for this exact ns-3 version in test/known-failures.txt
 # (`unit:<suite>`) must fail; any other failure fails the stage.
 set -uo pipefail
@@ -51,6 +56,22 @@ if [ -n "${UNIT_SET:-}" ]; then
 fi
 mods=$(awk -v g="$group" '!/^#/ && $1 == g {$1=""; print}' /src/test/ns3-suites.txt | xargs)
 [ -n "$mods" ] || { echo "unit: no '$group' group in test/ns3-suites.txt" >&2; exit 2; }
+if [ -n "${UNIT_SHARD:-}" ]; then
+    n=${UNIT_SHARD#*/}
+    shard_mods=$(awk -v g="$group" -v s="$UNIT_SHARD" '!/^#/ && $1 == "shard" && $2 == g && $3 == s {$1=$2=$3=""; print}' \
+        /src/test/ns3-suites.txt | xargs)
+    covered=$(awk -v g="$group" -v n="$n" '!/^#/ && $1 == "shard" && $2 == g && $3 ~ ("^[0-9]+/" n "$") {for (i = 4; i <= NF; i++) print $i}' \
+        /src/test/ns3-suites.txt | sort)
+    want=$(tr ' ' '\n' <<<"$mods" | sort)
+    if [ "$covered" != "$want" ]; then
+        echo "unit: the '$group' shards of $n in test/ns3-suites.txt do not cover the group exactly once" >&2
+        diff <(echo "$want") <(echo "$covered") | sed 's/^/  /' >&2
+        exit 2
+    fi
+    [ -n "$shard_mods" ] || { echo "unit: no 'shard $group $UNIT_SHARD' line in test/ns3-suites.txt" >&2; exit 2; }
+    mods=$shard_mods
+    why="$why, shard $UNIT_SHARD"
+fi
 echo "unit: $group group ($why): $mods"
 
 if ./ns3 configure --help 2>/dev/null | grep -q -- --filter-module-examples-and-tests; then

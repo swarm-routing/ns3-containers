@@ -19,10 +19,11 @@ modules into the tree and builds them.
 
 ```
 docker/Dockerfile                 BASE_IMAGE x NS3_VERSION x BUILD_PROFILE image
+tools/pass_markers.py             promote's check: every test job of an image passed, all on one digest (+ test_pass_markers.py)
 tools/ns3_matrix.py               supported release vs on-demand releases (`--tier latest`: the supported release only), base digests and tags (+ test_ns3_matrix.py)
 docker/gcovr-requirements.in      gcovr's pin for the debug/sanitized images; docker/gcovr-requirements.txt: its hashed lock (uv pip compile, command in the .in)
 docker/scripts/build-contrib.sh   -> /usr/local/bin/ns3-build-contrib (--strict-warnings / --coverage [--quality-modules] through swarm-quality.cmake, the contrib targets only; ns-3.43+ and 3.36-3.42 target names)
-test/run.sh                       every test stage against one image ref (the candidate digest in CI); `security` runs Trivy (pinned by digest) on the host
+test/run.sh                       every test stage against one image ref (the candidate digest in CI); `security` runs Trivy (pinned by digest) on the host; `--stages`/`--unit-shard i/N` run a part (split test jobs, #86)
 .trivyignore                      accepted Dockerfile findings, each with its reason (the vuln and secret scans take none)
 .hadolint.yaml                    hadolint settings: failure at warning, apt/apk version pinning (DL3008/DL3018) ignored, trusted registries
 test/structure.sh                 image contract: tree, tools, env, configure record, CMake cache vs profile, C++ standard, gcovr on debug/sanitized
@@ -30,7 +31,7 @@ test/profile.sh                   the profile keeps its promise: asserts/logs on
 test/smoke.sh                     image smoke (incremental build + test.py + guards; --strict-warnings catches a planted -Wshadow in a source and in an own header reached through ns3/, --quality-modules leaves a dependency unjudged, --coverage instruments the module only, the image's gcovr reports it)
 test/integration.sh               ns-3 simulates: tutorial `first` + manet-canary AODV/OLSR/DSDV dense/sparse under a wall-clock budget
 test/unit.sh                      ns-3's own QUICK unit suites for the modules in test/ns3-suites.txt (full on debug/sanitized; UNIT_SET=light|full overrides, light on PRs for the OS variants); prints every suite's time
-test/ns3-suites.txt               which modules' suites the unit stage runs, per profile group
+test/ns3-suites.txt               which modules' suites the unit stage runs, per profile group; `split`/`shard` lines: which profiles test in parallel jobs (#86)
 test/known-failures.txt           upstream bugs expected on one exact ns-3 version (strict XFAIL, shown in the summary)
 test/fixtures/swarm-hello/        minimal contrib module (C++17..C++23) used by the smoke (GPL-2.0-only: an ns-3 module)
 test/fixtures/manet-canary/       short MANET program for the integration stage (GPL-2.0-only)
@@ -121,7 +122,7 @@ Org-wide (1–9), then this repo's own.
 14. **One buildx cache scope per version x base x profile** (`mode=max`, registry cache in `ns3-dev-cache`); delete a scope's tag when its version stops being the supported release.
 15. **The version list is generated, never typed.** `tools/ns3_matrix.py` reads upstream tags; a hand-pinned version would silently stop following ns-3's supported release.
 16. **Automatic pipelines build only the release ns-3 supports** (its latest; the generator's default). Older releases are history: never rebuild them as a side effect; the `versions` input is a deliberate, manual, on-demand build.
-17. **What is tested is what is tagged.** Each image is built once; every test runs on that build by digest, in the same run; tags are a carbon copy of that digest (`imagetools create`), never a rebuild. A new test stage goes into `test/run.sh`, so automatic and on-demand builds (and fork PRs) all run it (#36, #37). PRs never tag; `main` runs every stage on every image, each with its profile's unit group (`full` on every debug and sanitized image), before it promotes the digest. On a PR only, the Debian, slim and Alpine images run the `light` unit group (`UNIT_SET`, set by the workflow from the event and the matrix entry; maintainer decision on #87); Ubuntu `debug` and `sanitized` keep `full`. A run without `UNIT_SET` runs the profile's group. A known upstream bug is a `test/known-failures.txt` entry for one exact ns-3 version with its tracking issue, never a skipped or loosened check.
+17. **What is tested is what is tagged.** Each image is built once; every test runs on that build by digest, in the same run; tags are a carbon copy of that digest (`imagetools create`), never a rebuild. A new test stage goes into `test/run.sh`, so automatic and on-demand builds (and fork PRs) all run it (#36, #37). An image may be tested in parallel jobs (`split` in `test/ns3-suites.txt`, #86), all on the same digest in the same run; promote needs every one of them, and `test/run.sh` with no option still runs everything. PRs never tag; `main` runs every stage on every image, each with its profile's unit group (`full` on every debug and sanitized image), before it promotes the digest. On a PR only, the Debian, slim and Alpine images run the `light` unit group (`UNIT_SET`, set by the workflow from the event and the matrix entry; maintainer decision on #87); Ubuntu `debug` and `sanitized` keep `full`. A run without `UNIT_SET` runs the profile's group. A known upstream bug is a `test/known-failures.txt` entry for one exact ns-3 version with its tracking issue, never a skipped or loosened check.
 
 ## Conventions
 
