@@ -58,9 +58,13 @@ jobs:
           failure-threshold: warning
 
   trivy-config:
-    name: trivy config
+    # The check run keeps the job id as its name: the README's live Trivy
+    # badge (org-sync `trivy`) filters check runs on `trivy-config`.
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    # Visibility only: a scanner or upload failure never blocks a PR; the
+    # blocking config gate is test/run.sh's `security` stage.
+    continue-on-error: true
     permissions:
       contents: read
       security-events: write   # SARIF upload
