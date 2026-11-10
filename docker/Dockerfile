@@ -46,13 +46,22 @@ ENV DEBIAN_FRONTEND=noninteractive
 # (and -slim): gcc-14, CMake 3.31. alpine (experimental, musl): bash is needed
 # by ns3-build-contrib, samurai provides `ninja`. Every ns-3 in the window
 # (3.40-3.49) needs CMake >= 3.10..3.25 and C++17..C++23, all covered.
-RUN if command -v apt-get >/dev/null; then \
+# The base is pinned by digest (invariant 13) and can lag its distribution's
+# security archive by days, so the packages already in it are upgraded too
+# (#29): the image's security stage fails on any fixable vulnerability. A
+# security rebuild of an unchanged Dockerfile passes a new REFRESH (a date or
+# run id) to rerun this layer; an unchanged REFRESH keeps the cache.
+ARG REFRESH=none
+RUN echo "package refresh: ${REFRESH}" \
+ && if command -v apt-get >/dev/null; then \
         apt-get update \
+     && apt-get upgrade -y --no-install-recommends \
      && apt-get install -y --no-install-recommends \
             ca-certificates git g++ cmake ninja-build python3 make \
      && rm -rf /var/lib/apt/lists/*; \
     elif command -v apk >/dev/null; then \
-        apk add --no-cache bash ca-certificates git g++ cmake samurai python3 make linux-headers; \
+        apk upgrade --no-cache \
+     && apk add --no-cache bash ca-certificates git g++ cmake samurai python3 make linux-headers; \
     else echo "unsupported base image" >&2; exit 1; fi
 
 RUN case "${BUILD_PROFILE}" in \
