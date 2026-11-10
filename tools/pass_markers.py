@@ -19,16 +19,26 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
+
+# An image name or test part is one path component: no separator, no leading dot.
+SAFE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 
 
 def digest_of(root, name, parts):
     """The one digest every part's marker names, or raise ValueError saying why not."""
     if not parts:
         raise ValueError(f"{name}: no test parts")
+    root = os.path.realpath(root)
     seen = {}
     for p in parts:
-        f = os.path.join(root, f"passed-{name}--{p['part']}", "digest")
+        for what, v in (("image name", name), ("test part", p["part"])):
+            if not SAFE.fullmatch(v):
+                raise ValueError(f"{v!r} is not a valid {what}")
+        f = os.path.realpath(os.path.join(root, f"passed-{name}--{p['part']}", "digest"))
+        if os.path.commonpath([root, f]) != root:
+            raise ValueError(f"{name}: marker {f} is not a valid path under {root}")
         try:
             with open(f) as fh:
                 d = fh.read().strip()

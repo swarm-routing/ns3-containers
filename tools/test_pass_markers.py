@@ -52,6 +52,19 @@ class PassMarkers(unittest.TestCase):
             pm.digest_of(self.root, "3.49-debian-debug", [{"part": "all"}])
         self.assertEqual(pm.digest_of(self.root, "3.49-debug", [{"part": "all"}]), "sha256:aa")
 
+    def test_names_that_leave_the_root_are_refused(self):
+        # name and part come from argv; neither may climb out of <dir> (Sonar S8707).
+        outside = os.path.join(self.root, "outside")
+        os.makedirs(os.path.join(outside, "x"))
+        with open(os.path.join(outside, "x", "digest"), "w") as f:
+            f.write("sha256:aa\n")
+        sub = os.path.join(self.root, "sub")
+        os.makedirs(sub)
+        for name, part in (("../outside/x", "all"), ("3.49-debug", "../../outside/x"),
+                           ("3.49/debug", "all"), ("3.49-debug", ".."), ("", "all")):
+            with self.assertRaisesRegex(ValueError, "not a valid"):
+                pm.digest_of(sub, name, [{"part": part}])
+
     def test_cli_exit_codes(self):
         self.mark("3.49-debug", "all")
         self.assertEqual(pm.main([self.root, "3.49-debug", '[{"part": "all"}]']), 0)
