@@ -51,12 +51,16 @@ ENV DEBIAN_FRONTEND=noninteractive
 # (#29): the image's security stage fails on any fixable vulnerability. A
 # security rebuild of an unchanged Dockerfile passes a new REFRESH (a date or
 # run id) to rerun this layer; an unchanged REFRESH keeps the cache.
+# Acquire::Retries=0: the base's own apt does the download that installs the
+# fix, and CVE-2026-109518 (apt, hard-link reuse) needs a non-zero retry count
+# to be exploited over HTTP (Ubuntu's advisory; the default is 3 since Ubuntu
+# 22.04 / Debian 12). A transient mirror error now fails the build instead.
 ARG REFRESH=none
 RUN echo "package refresh: ${REFRESH}" \
  && if command -v apt-get >/dev/null; then \
-        apt-get update \
-     && apt-get upgrade -y --no-install-recommends \
-     && apt-get install -y --no-install-recommends \
+        apt-get -o Acquire::Retries=0 update \
+     && apt-get -o Acquire::Retries=0 upgrade -y --no-install-recommends \
+     && apt-get -o Acquire::Retries=0 install -y --no-install-recommends \
             ca-certificates git g++ cmake ninja-build python3 make \
      && rm -rf /var/lib/apt/lists/*; \
     elif command -v apk >/dev/null; then \
