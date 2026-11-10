@@ -76,6 +76,17 @@ RUN echo "package refresh: ${REFRESH}" \
      && apk add --no-cache bash ca-certificates git g++ cmake samurai python3 make linux-headers; \
     else echo "unsupported base image" >&2; exit 1; fi
 
+# The clone target must not exist yet, so WORKDIR comes after the clone.
+RUN git clone --depth 1 --branch "ns-${NS3_VERSION}" \
+        https://gitlab.com/nsnam/ns-3-dev.git /opt/ns-3 \
+ && rm -rf /opt/ns-3/.git
+
+WORKDIR /opt/ns-3
+
+# ${flags} is unquoted on purpose: it holds one or two configure options
+# ("-d debug --enable-sanitizers") that must split into separate words, as
+# ns3-build-contrib splits NS3_PROFILE_FLAGS.
+# hadolint ignore=SC2086
 RUN case "${BUILD_PROFILE}" in \
         default)   flags="-d default" ;; \
         optimized) flags="-d release" ;; \
@@ -83,10 +94,6 @@ RUN case "${BUILD_PROFILE}" in \
         sanitized) flags="-d debug --enable-sanitizers" ;; \
         *) echo "unknown BUILD_PROFILE=${BUILD_PROFILE}" >&2; exit 1 ;; \
     esac \
- && git clone --depth 1 --branch "ns-${NS3_VERSION}" \
-        https://gitlab.com/nsnam/ns-3-dev.git /opt/ns-3 \
- && rm -rf /opt/ns-3/.git \
- && cd /opt/ns-3 \
  && printf 'NS3_VERSION=%s\nBUILD_PROFILE=%s\nNS3_PROFILE_FLAGS="%s"\nNS3_MODULES="%s"\n' \
         "${NS3_VERSION}" "${BUILD_PROFILE}" "${flags}" "${NS3_MODULES}" > .swarm-configure.env \
  && ./ns3 configure -G Ninja ${flags} --enable-examples --enable-tests \
