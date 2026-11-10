@@ -42,8 +42,10 @@ name: Publish images
 #                                                      Debian, slim and Alpine images run the
 #                                                      `light` unit group (UNIT_SET, #87)
 #   pull request (any other change)                    nothing built: resolve yields an empty matrix
-#   merge group (the merge queue, .github#130)         as a pull request, diffed against the
-#                                                      group's base (merge_group.base_sha)
+#   merge group (the merge queue, .github#130)         as a pull request (diffed against the
+#                                                      group's base, merge_group.base_sha), but
+#                                                      every image runs its full unit group
+#                                                      (golden rule 17: `light` is PR-only)
 #   schedule (weekly)                                  supported release, only if not yet published
 #   workflow_dispatch                                  `versions` (any release, on demand), else
 #                                                      the supported release; promote on main
@@ -243,7 +245,7 @@ jobs:
           EXPECT_OS: ${{ matrix.os }}
           EXPECT_REVISION: ${{ github.sha }}
           EXPECT_BUILD_RUN: ${{ github.run_id }}-${{ github.run_attempt }}
-          UNIT_SET: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && matrix.pr_unit_set || '' }}
+          UNIT_SET: ${{ github.event_name == 'pull_request' && matrix.pr_unit_set || '' }}
         run: test/run.sh "ns3-dev-local:${NAME}"
 
   test:
@@ -292,8 +294,8 @@ jobs:
           EXPECT_OS: ${{ matrix.os }}
           EXPECT_REVISION: ${{ github.sha }}
           EXPECT_BUILD_RUN: ${{ steps.pull.outputs.build_run }}
-          # Pull requests and merge groups only: the OS variants run the light unit group (#87).
-          UNIT_SET: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && matrix.pr_unit_set || '' }}
+          # Pull requests only: the OS variants run the light unit group (#87).
+          UNIT_SET: ${{ github.event_name == 'pull_request' && matrix.pr_unit_set || '' }}
           STAGES: ${{ matrix.stages }}
           SHARD: ${{ matrix.unit_shard }}
         run: |
