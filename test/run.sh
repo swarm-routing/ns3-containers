@@ -35,7 +35,11 @@ summary=${GITHUB_STEP_SUMMARY:-/dev/null}
 
 notes=$(mktemp)
 times=$(mktemp)
+unitset=$(mktemp)
 print_notes() {
+    if [ -s "$unitset" ]; then
+        { echo; echo "Unit set that ran: $(cat "$unitset")"; } >> "$summary"
+    fi
     if [ -s "$times" ]; then
         { echo; echo "Slowest unit suites (s):"; echo; echo '```'; cat "$times"; echo '```'; } >> "$summary"
     fi
@@ -57,6 +61,9 @@ stage() {
     echo "::endgroup::"
     grep -E '^ *(XFAIL|SKIP) ' "$out" | sed "s/^ */[$name] /" >> "$notes" || true
     grep -E '^ *TIME ' "$out" | head -15 | sed 's/^ *TIME *//' >> "$times" || true
+    # unit.sh names the group it resolved and why: "unit: <group> group (<why>): <modules>".
+    # shellcheck disable=SC2016  # the backticks are Markdown, not a command
+    sed -nE 's/^unit: ([a-z]+) group \((.*)\): .*/`\1` (\2)/p' "$out" | head -1 >> "$unitset" || true
     rm -f "$out"
     local took=$(( $(date +%s) - start ))
     if [ "$rc" -eq 0 ]; then
@@ -139,12 +146,6 @@ security() {
 
 {
     echo "### Tests on \`$image\`"
-    echo
-    if [ -n "${UNIT_SET:-}" ]; then
-        echo "Unit set: \`$UNIT_SET\` (UNIT_SET; the pipeline sets \`light\` on pull requests for the Debian, slim and Alpine images)"
-    else
-        echo "Unit set: the profile's group (\`full\` on debug and sanitized, \`light\` on default and optimized)"
-    fi
     echo
     echo "| Stage | Result | Time |"
     echo "|---|---|---|"
