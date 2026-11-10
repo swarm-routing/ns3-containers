@@ -30,10 +30,12 @@ test/integration.sh               ns-3 simulates: tutorial `first` + manet-canar
 test/unit.sh                      ns-3's own QUICK unit suites for the modules in test/ns3-suites.txt (full on debug/sanitized)
 test/ns3-suites.txt               which modules' suites the unit stage runs, per profile group
 test/known-failures.txt           upstream bugs expected on one exact ns-3 version (strict XFAIL, shown in the summary)
+test/downstream.sh                the downstream canary: clone, stage, ns3-build-contrib --test and run each consumer in test/downstream.txt on one image (ubuntu debug only; --check validates the list); gates latest-*
+test/downstream.txt               the org's ns-3 modules the canary builds (name | repo@ref | ns-3 range | modules | suites | stage | run); a new protocol is one line
 test/fixtures/swarm-hello/        minimal contrib module (C++17..C++23) used by the smoke (GPL-2.0-only: an ns-3 module)
 test/fixtures/manet-canary/       short MANET program for the integration stage (GPL-2.0-only)
 test/fixtures/profile-probe/      one deliberate assert/log/memory bug per mode, for the profile stage (GPL-2.0-only)
-.github/workflows/publish-images.yml   resolve -> build once (candidate in ns3-dev-ci) -> test by digest -> promote = retag the same digest (main) -> sign -> attest -> latest-* -> discard this run's candidates (PRs too); weekly new release; `versions` = on demand
+.github/workflows/publish-images.yml   resolve -> build once (candidate in ns3-dev-ci) -> test by digest -> promote = retag the same digest (main) -> sign -> attest; downstream canary on the ubuntu debug candidate (advisory on PRs, opens/updates an issue on main) -> latest-* -> discard this run's candidates (PRs too); weekly new release; `versions` = on demand
 .github/workflows/candidates-cleanup.yml   daily: ns3-dev-ci candidates left by failed runs (> 7 days), untagged ns3-dev-cache versions (> 1 day); never ns3-dev
 .github/workflows/licence.yml     licence headers (tooling MIT OR GPL-2.0-only, rest GPL-2.0-only)
 .github/ISSUE_TEMPLATE/           the org's forms (copied: a repo folder replaces the org defaults) + image-request.yml
@@ -47,6 +49,8 @@ docker build -f docker/Dockerfile --build-arg NS3_VERSION=3.48 \
     --build-arg BUILD_PROFILE=debug -t ns3-dev:3.48-debug .        # ~8-15 min on 4 cores
 EXPECT_VERSION=3.48 EXPECT_PROFILE=debug EXPECT_OS=ubuntu \
     test/run.sh ns3-dev:3.48-debug                                 # every test stage, as CI runs them
+test/downstream.sh --check                                         # the consumer list parses (no docker)
+test/downstream.sh ns3-dev:3.48-debug                              # every org module builds and passes on the image (latest-* gate)
 shellcheck docker/scripts/build-contrib.sh test/*.sh
 actionlint .github/workflows/*.yml
 ```

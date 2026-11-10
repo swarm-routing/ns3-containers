@@ -21,12 +21,25 @@ name: Publish images
 #   promote  an image whose tests passed gets its versioned and -<sha7> tags
 #            by `imagetools create` from that same digest (a carbon copy, no
 #            rebuild), then is signed and attested by digest
+#   canary   the org's ns-3 modules (test/downstream.txt) are built and
+#            tested on the ubuntu debug candidate by test/downstream.sh, in
+#            parallel with promote (ns3-containers#44); a failing consumer
+#            opens or updates an issue here
 #   latest   the latest-* tags move last, only when every required image of
-#            the run passed (Alpine is experimental: it never blocks)
+#            the run passed and every downstream canary passed (Alpine is
+#            experimental: it never blocks)
 #
 # Automatic and on-demand builds go through the same jobs and the same tests
 # (ns3-containers#36). A fork PR cannot push a candidate: its build job loads
 # the image and runs the same test/run.sh on it in place.
+#
+# The downstream canary gates only the rolling latest-* tags, not the
+# versioned and -<sha7> tags: it tests the consumers on the image, not the
+# image's own contract (test/run.sh does that), and a consumer's bug must not
+# withhold an image that passed its tests. On a pull request it runs but is
+# advisory (a red job, a green run): a consumer's own breakage on its main
+# must not fail an unrelated image PR; main is the gate. Fork PRs have no
+# candidate to pull and skip it.
 #
 #   push to main (docker/, test/, tools/, this file)  supported release: build + test + promote
 #   pull request (same paths)                          supported release: build + test
@@ -86,10 +99,14 @@ jobs:
     outputs:
       matrix: ${{ steps.m.outputs.matrix }}
       count: ${{ steps.m.outputs.count }}
+      canary: ${{ steps.m.outputs.canary }}
+      canary_count: ${{ steps.m.outputs.canary_count }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Test the matrix generator
         run: python3 -m unittest discover -s tools -v
+      - name: Validate the downstream consumer list
+        run: test/downstream.sh --check
       - name: Generate the matrix from upstream tags
         id: m
         env:
@@ -103,6 +120,11 @@ jobs:
           count=$(printf '%s' "$matrix" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["include"]))')
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
           echo "count=$count" >> "$GITHUB_OUTPUT"
+          # The downstream canary runs on the ubuntu debug image of each
+          # release (what consumers' CI builds on; test/downstream.sh).
+          canary=$(printf '%s' "$matrix" | python3 -c 'import json,sys; m=json.load(sys.stdin); print(json.dumps({"include": [e for e in m["include"] if e["os"] == "ubuntu" and e["profile"] == "debug"]}))')
+          echo "canary=$canary" >> "$GITHUB_OUTPUT"
+          echo "canary_count=$(printf '%s' "$canary" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["include"]))')" >> "$GITHUB_OUTPUT"
           printf '%s' "$matrix" | python3 -c 'import json,sys; [print(e["name"], "<-", e["version"], "|", e["tags"]) for e in json.load(sys.stdin)["include"]]' >> "$GITHUB_STEP_SUMMARY"
 
   build:
@@ -376,12 +398,87 @@ jobs:
             "${IMAGE}@${DIGEST}" > /dev/null
           echo "signature verified for \`$IDENTITY\`" >> "$GITHUB_STEP_SUMMARY"
 
+  canary:
+    name: downstream canary ${{ matrix.name }}
+    needs: [resolve, test]
+    # On the tested candidate, in parallel with promote. Fork PRs have no
+    # candidate; on any PR the result is advisory (see the header).
+    if: ${{ !cancelled() && needs.resolve.outputs.canary_count != '0' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    continue-on-error: ${{ github.event_name == 'pull_request' }}
+    permissions:
+      contents: read
+      packages: read       # pull the candidate
+      issues: write        # report a failing consumer
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.resolve.outputs.canary) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Only an image that passed test/run.sh is canaried.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: passed-${{ matrix.name }}
+          path: pass
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Pull the candidate by digest
+        id: pull
+        run: |
+          ref="${CANDIDATE}@$(cat pass/digest)"
+          docker pull "$ref"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+      - name: Build and test the org's modules (test/downstream.txt)
+        env:
+          REF: ${{ steps.pull.outputs.ref }}
+          DOWNSTREAM_FAILED: ${{ runner.temp }}/downstream-failed
+        run: test/downstream.sh "$REF"
+      # A failing consumer on main (or a scheduled or dispatched run of it):
+      # one open issue per consumer and release, updated on every new failure.
+      - name: Open or update an issue per failing consumer
+        if: ${{ failure() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FAILED: ${{ runner.temp }}/downstream-failed
+          VERSION: ${{ matrix.version }}
+          REF: ${{ steps.pull.outputs.ref }}
+        run: |
+          [ -s "$FAILED" ] || { echo "no consumer failed (the failure is the job's own)"; exit 0; }
+          log="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          while read -r name src reason; do
+            title="downstream canary: ${name} fails on ns3-dev ${VERSION}"
+            body=$(printf '%s\n' \
+              "The downstream canary (\`test/downstream.sh\`, #44) failed for **${name}** on the candidate \`${REF}\` (ns-3 ${VERSION}, ubuntu debug)." \
+              "" \
+              "- consumer: [\`${src}\`](https://github.com/${src%@*}/commit/${src#*@})" \
+              "- result: ${reason}" \
+              "- log: ${log} (job *downstream canary*)" \
+              "" \
+              "\`latest-*\` was not moved: it stays on the previous digest until every consumer passes. Reproduce with \`test/downstream.sh <image-ref>\`." \
+              "" "---" "_Opened by publish-images.yml_")
+            num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"${title}\" in:title" \
+                    --json number,title --jq ".[] | select(.title == \"${title}\") | .number" | head -1)
+            if [ -n "$num" ]; then
+              gh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "$body"
+              echo "${name}: updated #${num}" >> "$GITHUB_STEP_SUMMARY"
+            else
+              url=$(gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --label bug --label ns3 --body "$body")
+              echo "${name}: opened ${url}" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done < "$FAILED"
+
   latest:
     name: move latest-*
-    needs: [resolve, test, promote]
+    needs: [resolve, test, promote, canary]
     # Last, and only when every required (non-experimental) image passed its
-    # tests and was promoted: `latest` never points at a partial set.
-    if: ${{ !cancelled() && needs.resolve.outputs.count != '0' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.test.result == 'success' && needs.promote.result == 'success' }}
+    # tests and was promoted, and every downstream canary passed: `latest`
+    # never points at a partial set, nor at a release that breaks a consumer.
+    if: ${{ !cancelled() && needs.resolve.outputs.count != '0' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.test.result == 'success' && needs.promote.result == 'success' && needs.canary.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -403,6 +500,7 @@ jobs:
         env:
           MATRIX: ${{ needs.resolve.outputs.matrix }}
         run: |
+          echo "every downstream canary passed (the *downstream canary* jobs' summaries list each consumer and commit)" >> "$GITHUB_STEP_SUMMARY"
           printf '%s' "$MATRIX" | python3 -c 'import json,sys; [print(e["name"], e["latest_tags"]) for e in json.load(sys.stdin)["include"] if e["latest_tags"]]' |
           while read -r name tags; do
             f="pass/passed-${name}/digest"
@@ -426,7 +524,7 @@ jobs:
 
   discard:
     name: discard this run's candidates
-    needs: [resolve, test, promote, latest]
+    needs: [resolve, test, promote, canary, latest]
     # Every run, PRs included, deletes the candidates it pushed once nothing
     # needs them: after a clean run (tests passed and, on main, the tags were
     # copied). A run with a failure keeps them, so "re-run failed jobs" can
@@ -437,6 +535,7 @@ jobs:
           && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
           && needs.test.result == 'success'
           && contains(fromJSON('["success","skipped"]'), needs.promote.result)
+          && contains(fromJSON('["success","skipped"]'), needs.canary.result)
           && contains(fromJSON('["success","skipped"]'), needs.latest.result) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15

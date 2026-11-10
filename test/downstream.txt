@@ -1,0 +1,39 @@
+# The org's ns-3 contrib modules the downstream canary builds and tests on a
+# new image before `latest-*` moves (test/downstream.sh, ns3-containers#44).
+# One consumer per line, columns separated by `|`:
+#
+#   name | owner/repo@ref | ns-3 | modules | suites | stage | run
+#
+# name     the consumer; its checkout is /w/<name> in the container
+# ref      a branch, a tag or a 40-char commit (consumers' CI follows main)
+# ns-3     releases it supports: `3.42+` (that one and newer) or `3.36-3.48`;
+#          an image outside the range skips it (on-demand older builds)
+# modules  ns3-build-contrib specs `name=path`, path relative to /w, so a
+#          dependency is another line's checkout; dependencies first
+# suites   test.py suites (empty: every module's own suite)
+# stage    bash, in the checkout, before the build (a repo whose install
+#          copies files: the `stage` contract of swarm-routing/.github
+#          reusable-ns3-image.yml)
+# run      bash, in the checkout, after the build: the consumer's own
+#          checks, invoked as-is
+#
+# A field cannot contain `|`; a pipeline belongs in a consumer's script.
+#
+# A consumer that ships `ci/canary.sh` runs that instead (in the checkout,
+# inside the image; exit 0 = pass) and its columns here are ignored. A line
+# whose module directory does not exist yet is skipped with its reason, so a
+# protocol is listed before it has an ns-3 module and is picked up the day
+# it gets one.
+#
+# ns3-tools runs its stock-arm delivery check without `aodv`: ns-3.49's stock
+# AODV livelocks (ns3-containers#35, AntHocNet#843); put it back when a fixed
+# release is the supported one. AntHocNet runs the suites and the example its
+# own `latest` leg runs (its AODV-family gates are on 3.48 for the same reason).
+
+ns3-swarm-core | swarm-routing/ns3-swarm-core@main | 3.42+ | swarm-core=ns3-swarm-core | | |
+ns3-tools | swarm-routing/ns3-tools@main | 3.42+ | routing-bench=ns3-tools/ns3/routing-bench | | | bash tools/checks/check-stock-arms.sh /opt/ns-3 "olsr dsdv hwmp"
+AntHocNet | swarm-routing/AntHocNet@main | 3.36+ | routing-bench=AntHocNet/.stage/contrib/routing-bench oracle=AntHocNet/.stage/contrib/oracle aomdv=AntHocNet/.stage/contrib/aomdv gpsr=AntHocNet/.stage/contrib/gpsr adaptive=AntHocNet/.stage/contrib/adaptive anthocnet=AntHocNet/.stage/contrib/anthocnet | anthocnet oracle adaptive routing-bench | mkdir -p .stage/contrib && touch .stage/CMakeLists.txt && make -s install-ns3 NS3DIR="$PWD/.stage" | cd /opt/ns-3 && ./ns3 run --no-build anthocnet-example
+ARA | swarm-routing/ARA@main | 3.42+ | swarm-core=ns3-swarm-core ara=ARA/ns3 | | |
+BeeAdHoc | swarm-routing/BeeAdHoc@main | 3.42+ | swarm-core=ns3-swarm-core beeadhoc=BeeAdHoc/ns3 | | |
+Termite | swarm-routing/Termite@main | 3.42+ | swarm-core=ns3-swarm-core termite=Termite/ns3 | | |
+HOPNET | swarm-routing/HOPNET@main | 3.42+ | swarm-core=ns3-swarm-core hopnet=HOPNET/ns3 | | |
