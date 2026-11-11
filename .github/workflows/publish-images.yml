@@ -45,6 +45,10 @@ name: Publish images
 #                                                      `light` unit group (UNIT_SET, #87); the
 #                                                      main-only suites wait for main (UNIT_PR, #86)
 #   pull request (any other change)                    nothing built: resolve yields an empty matrix
+#   merge group (the merge queue, .github#130)         as a pull request (diffed against the
+#                                                      group's base, merge_group.base_sha), but
+#                                                      every image runs its full unit group
+#                                                      (golden rule 17: `light` is PR-only)
 #   schedule (weekly)                                  supported release, only if not yet published
 #   workflow_dispatch                                  `versions` (any release, on demand), else
 #                                                      the supported release; promote on main
@@ -77,6 +81,7 @@ on:
     branches: [main]
     paths: ['docker/**', 'test/**', 'tools/**', '.github/workflows/publish-images.yml']
   pull_request:
+  merge_group:  # the merge queue runs the required checks on each group (swarm-routing/.github#130)
   schedule:
     - cron: '17 3 * * 1'   # Mondays 03:17 UTC: pick up new ns-3 releases
   workflow_dispatch:
@@ -132,10 +137,11 @@ jobs:
         id: changes
         env:
           EVENT: ${{ github.event_name }}
-          BASE: ${{ github.event.pull_request.base.sha }}
+          # A merge group has no pull_request: it diffs against the group's base.
+          BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
         run: |
           images=true
-          if [ "$EVENT" = pull_request ]; then
+          if [ "$EVENT" = pull_request ] || [ "$EVENT" = merge_group ]; then
             # --no-renames: a file moved out of an image path counts by its old name too.
             files=$(git diff --name-only --no-renames "$BASE" HEAD)
             printf 'changed:\n%s\n' "$files"
