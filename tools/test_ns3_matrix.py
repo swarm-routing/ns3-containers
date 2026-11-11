@@ -100,6 +100,22 @@ class Supported(unittest.TestCase):
         self.assertEqual(got["3.49-debian-debug"], "light")
         self.assertEqual(got["3.49-alpine-debug"], "light")
 
+    def test_representatives(self):
+        # tools/pr_tests.py: a PR that changes only test stages runs them on these.
+        reps = sorted(e["name"] for e in self.mx if e["representative"])
+        self.assertEqual(reps, ["3.49-alpine-debug", "3.49-debian-debug", "3.49-debug",
+                                "3.49-optimized", "3.49-sanitized", "3.49-slim-default"])
+        # Every base and every profile of the plan has one; one per base but Ubuntu.
+        self.assertEqual({e["os"] for e in self.mx if e["representative"]}, {e["os"] for e in self.mx})
+        self.assertEqual({e["profile"] for e in self.mx if e["representative"]},
+                         {e["profile"] for e in self.mx})
+        for os_ in ("debian", "slim", "alpine"):
+            self.assertEqual(sum(e["representative"] for e in self.mx if e["os"] == os_), 1, os_)
+
+    def test_on_demand_release_has_a_representative(self):
+        mx = run(LS_REMOTE, "--versions", "3.36")
+        self.assertEqual([e["profile"] for e in mx if e["representative"]], ["debug"])
+
 
 class OnDemand(unittest.TestCase):
     """--versions builds any upstream release by hand (ubuntu x default, debug)."""
