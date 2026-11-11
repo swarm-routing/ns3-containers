@@ -113,6 +113,41 @@ check_cache NS3_EXAMPLES ON                # rule 10: the shared configure line
 check_cache NS3_TESTS ON
 check_cache NS3_WARNINGS_AS_ERRORS OFF
 
+echo "structure: gcovr (debug and sanitized only)"
+want_gcovr=$(sed -n 's/^gcovr==//p' /src/docker/gcovr-requirements.in 2>/dev/null)
+case "${BUILD_PROFILE:-}" in
+    debug|sanitized)
+        if got_gcovr=$(gcovr --version 2>/dev/null | sed -n '1s/^gcovr //p') && [ -n "$got_gcovr" ]; then
+            if [ -z "$want_gcovr" ]; then
+                ok "gcovr $got_gcovr (no /src/docker/gcovr-requirements.in to compare with)"
+            elif [ "$got_gcovr" = "$want_gcovr" ]; then
+                ok "gcovr $got_gcovr, the pinned version"
+            else
+                bad "gcovr $got_gcovr, docker/gcovr-requirements.in pins $want_gcovr"
+            fi
+        else
+            bad "gcovr missing or does not run: the coverage leg would fall back to apt"
+        fi ;;
+    *)
+        if command -v gcovr >/dev/null; then
+            bad "gcovr is on the ${BUILD_PROFILE:-?} profile: only debug and sanitized carry it"
+        else
+            ok "no gcovr on the ${BUILD_PROFILE:-?} profile"
+        fi ;;
+esac
+
+if [ "${BUILD_PROFILE:-}" = debug ]; then
+    echo "structure: SonarQube scan tools (debug: unzip, curl, gpg; ns3-containers#88)"
+    for tool in unzip curl gpg; do
+        # unzip has no --version; -v prints its version and exits 0.
+        if "$tool" --version >/dev/null 2>&1 || "$tool" -v >/dev/null 2>&1; then
+            ok "$tool runs"
+        else
+            bad "$tool missing or does not run: reusable-ns3-ci's sonar step would fall back to apt"
+        fi
+    done
+fi
+
 echo "structure: C++ standard and compiler"
 macros="$NS3/build-support/macros-and-definitions.cmake"
 need=$(grep -oE 'set\(CMAKE_CXX_STANDARD_MINIMUM [0-9]+' "$macros" 2>/dev/null | grep -oE '[0-9]+$' | head -1)

@@ -1,2 +1,3 @@
 *
 !docker/scripts/
+!docker/gcovr-requirements.txt

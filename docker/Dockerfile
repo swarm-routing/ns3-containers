@@ -44,7 +44,13 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Toolchain from the distribution. ubuntu 24.04: gcc-13, CMake 3.28. debian 13
 # (and -slim): gcc-14, CMake 3.31. alpine (experimental, musl): bash is needed
-# by ns3-build-contrib, samurai provides `ninja`. Every ns-3 in the window
+# by ns3-build-contrib, samurai provides `ninja`. On debug and sanitized,
+# python3-venv (Debian/Ubuntu; Alpine's python3 carries venv) holds gcovr's
+# environment, installed below; default and optimized do not get it. On debug
+# only, unzip, curl and gnupg (the same names on Alpine): reusable-ns3-ci.yml's
+# SonarQube step, which runs on debug, downloads the scanner and checks its
+# signature with them, and installs them by apt only when they are missing
+# (ns3-containers#88). Every ns-3 in the window
 # (3.40-3.49) needs CMake >= 3.10..3.25 and C++17..C++23, all covered.
 # The base is pinned by digest (invariant 13) and can lag its distribution's
 # security archive by days, so the packages already in it are upgraded too
@@ -60,7 +66,11 @@ ENV DEBIAN_FRONTEND=noninteractive
 # is retried, by the shell: 3 attempts, 10 s then 20 s apart. apk refetches its
 # index inside each --no-cache command, so it has no update step to retry.
 ARG REFRESH=none
+# ${venv} and ${sonar} are unquoted on purpose: empty, they make no word.
+# hadolint ignore=SC2086
 RUN echo "package refresh: ${REFRESH}" \
+ && case "${BUILD_PROFILE}" in debug|sanitized) venv=python3-venv ;; *) venv="" ;; esac \
+ && case "${BUILD_PROFILE}" in debug) sonar="unzip curl gnupg" ;; *) sonar="" ;; esac \
  && if command -v apt-get >/dev/null; then \
         for delay in 10 20 0; do \
             apt-get -o Acquire::Retries=0 update --error-on=any && break; \
@@ -69,11 +79,11 @@ RUN echo "package refresh: ${REFRESH}" \
         done \
      && apt-get -o Acquire::Retries=0 upgrade -y --no-install-recommends \
      && apt-get -o Acquire::Retries=0 install -y --no-install-recommends \
-            ca-certificates git g++ cmake ninja-build python3 make \
+            ca-certificates git g++ cmake ninja-build python3 ${venv} ${sonar} make \
      && rm -rf /var/lib/apt/lists/*; \
     elif command -v apk >/dev/null; then \
         apk upgrade --no-cache \
-     && apk add --no-cache bash ca-certificates git g++ cmake samurai python3 make linux-headers; \
+     && apk add --no-cache bash ca-certificates git g++ cmake samurai python3 make linux-headers ${sonar}; \
     else echo "unsupported base image" >&2; exit 1; fi
 
 # The clone target must not exist yet, so WORKDIR comes after the clone.
@@ -106,6 +116,27 @@ RUN case "${BUILD_PROFILE}" in \
 # the (long) build layer above.
 COPY --chmod=755 docker/scripts/build-contrib.sh /usr/local/bin/ns3-build-contrib
 COPY --chmod=644 docker/scripts/swarm-quality.cmake /usr/local/share/ns3-build-contrib/swarm-quality.cmake
+
+# gcovr for `ns3-build-contrib --coverage` reports (reusable-ns3-ci.yml's
+# coverage leg uses the image's gcovr and installs one only when it is
+# missing), on the profiles CI consumes. Pinned with every dependency's hash
+# (docker/gcovr-requirements.txt, compiled from gcovr-requirements.in), binary
+# wheels only, in its own venv so it never touches the distribution's Python;
+# pip is removed afterwards, since nothing in the image needs it. After the
+# ns-3 build, so a gcovr bump never rebuilds ns-3; the configure line is
+# untouched (invariant 10).
+COPY --chmod=644 docker/gcovr-requirements.txt /usr/local/share/ns3-build-contrib/gcovr-requirements.txt
+RUN case "${BUILD_PROFILE}" in \
+        debug|sanitized) \
+            python3 -m venv /opt/gcovr \
+         && PIP_DISABLE_PIP_VERSION_CHECK=1 /opt/gcovr/bin/pip install --no-cache-dir \
+                --require-hashes --only-binary=:all: \
+                -r /usr/local/share/ns3-build-contrib/gcovr-requirements.txt \
+         && /opt/gcovr/bin/pip uninstall -y -q pip \
+         && ln -s /opt/gcovr/bin/gcovr /usr/local/bin/gcovr \
+         && gcovr --version ;; \
+        *) echo "no gcovr on the ${BUILD_PROFILE} profile" ;; \
+    esac
 
 ENV NS3_VERSION=${NS3_VERSION} \
     BUILD_PROFILE=${BUILD_PROFILE} \

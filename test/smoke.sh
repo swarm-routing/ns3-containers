@@ -19,7 +19,8 @@
 #      a planted -Wshadow fails (in a source, and in its own header reached
 #      through the ns3/ include tree), a dependency left out by
 #      --quality-modules is not judged, and the build stays incremental;
-#   5. --coverage instruments the module: its .gcda files appear after the tests.
+#   5. --coverage instruments the module: its .gcda files appear after the tests,
+#      and the image's gcovr (debug, sanitized) reports them.
 set -euo pipefail
 
 MAX_STEPS=${MAX_STEPS:-40}
@@ -124,5 +125,15 @@ gcda=$(find "$NS3DIR/cmake-cache/contrib/swarm-hello" -name '*.gcda' | wc -l)
 other=$(find "$NS3DIR/cmake-cache/src" -name '*.gcda' 2>/dev/null | wc -l)
 [ "$other" = 0 ] || { echo "FAIL: --coverage instrumented stock ns-3 ($other .gcda under src/)" >&2; exit 1; }
 echo "smoke: --coverage instruments the module only ($gcda .gcda files)"
+if command -v gcovr >/dev/null; then
+    # The report as reusable-ns3-ci.yml's coverage leg makes it, from the build tree.
+    (cd "$NS3DIR/cmake-cache" && gcovr --root "$work/swarm-hello" --filter "$work/swarm-hello/" \
+        --txt --print-summary .) > "$log" 2>&1 || {
+        cat "$log"; echo "FAIL: gcovr could not report the module's coverage" >&2; exit 1; }
+    if ! grep -q 'swarm-hello\.cc' "$log" || ! grep -qE '^lines: [0-9.]+%' "$log"; then
+        cat "$log"; echo "FAIL: gcovr's report names no module source or line rate" >&2; exit 1
+    fi
+    echo "smoke: gcovr reports the module ($(grep -E '^lines:' "$log"))"
+fi
 
 echo "smoke: OK (profile ${BUILD_PROFILE}, ns-${NS3_VERSION})"

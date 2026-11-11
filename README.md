@@ -71,6 +71,11 @@ with SIGILL on another CPU.
 CI that should track ns-3 uses `latest-debug` / `latest-sanitized`; anything
 that produces a published number pins a versioned `-<sha7>` tag.
 
+CI tools: the `debug` and `sanitized` images carry `gcovr` (pinned, see
+`--coverage` below); `debug` also carries `unzip`, `curl` and `gnupg`, which
+the org's `reusable-ns3-ci.yml` SonarQube step uses to fetch and verify the
+scanner (#88). Both steps install them by apt only when they are missing.
+
 Toolchains: Ubuntu 24.04 gcc-13 / CMake 3.28; Debian 13 gcc-14 / CMake 3.31;
 each tree builds in its own C++ standard (ns-3's `CMAKE_CXX_STANDARD_MINIMUM`:
 C++17 for 3.40, C++20 for 3.41–3.45, C++23 from 3.46; the structure test reads
@@ -125,13 +130,14 @@ stays incremental:
   when included as `ns3/<header>.h`).
 - `--coverage` compiles and links them with `--coverage` (gcov); after
   `--test`, the `.gcda` files are under `/opt/ns-3/cmake-cache/contrib/<name>/`.
-  The image has no `gcovr`, and the `.gcda` files go with the container, so
-  report in the same run:
+  The `debug` and `sanitized` images carry `gcovr` (pinned with hashes in
+  [`docker/gcovr-requirements.txt`](docker/gcovr-requirements.txt), in its own
+  venv at `/opt/gcovr`); the `.gcda` files go with the container, so report in
+  the same run:
 
   ```bash
   docker run --rm -v "$PWD:/src/ara:ro" ghcr.io/swarm-routing/ns3-dev:latest-debug bash -c '
       ns3-build-contrib --coverage --test ara=/src/ara/ns3 &&
-      apt-get update -qq && apt-get install -y -qq gcovr >/dev/null &&
       cd /opt/ns-3/cmake-cache && gcovr --root /src/ara/ns3 --filter /src/ara/ns3/ .'
   ```
 
@@ -154,6 +160,7 @@ python3 tools/ns3_matrix.py | python3 -m json.tool | less   # what CI will build
 docker build -f docker/Dockerfile --build-arg NS3_VERSION=3.48 \
     --build-arg BUILD_PROFILE=debug -t ns3-dev:3.48-debug .  # BASE_IMAGE/BASE_OS for other bases
 test/run.sh ns3-dev:3.48-debug                             # every test stage, as CI runs them
+test/run.sh --stages structure,smoke ns3-dev:3.48-debug   # some of them (see "Split test jobs")
 ```
 
 `test/run.sh <image>` runs every test stage against one image: `labels` on
@@ -165,13 +172,13 @@ passes its matrix entry and commit):
 | Stage | Checks |
 |---|---|
 | `labels` | the OCI labels: source, licence, ns-3 version, profile, base, revision |
-| `structure` | `/opt/ns-3` configured and built, `ns3-build-contrib` on `PATH`, the environment, the recorded configure line and module list (equal to the Dockerfile's, every module built), the CMake cache matching the profile (build type, asserts, logs, sanitizers, no native optimizations, examples and tests on), the C++ standard the tree requires |
+| `structure` | `/opt/ns-3` configured and built, `ns3-build-contrib` on `PATH`, the environment, the recorded configure line and module list (equal to the Dockerfile's, every module built), the CMake cache matching the profile (build type, asserts, logs, sanitizers, no native optimizations, examples and tests on), the C++ standard the tree requires, `gcovr` at its pinned version on `debug` and `sanitized`, `unzip`, `curl` and `gpg` on `debug` |
 | `profile` | the profile does what its name says: asserts abort and `NS_LOG` prints (`default`, `debug`, `sanitized`) or both are compiled out (`optimized`); on `sanitized`, a planted use-after-free, leak and signed overflow are each reported by ASan, LSan and UBSan; no AVX/AVX-512 instruction in the stock core library (nothing built for the build machine's CPU) |
-| `smoke` | builds `test/fixtures/swarm-hello`, runs its test.py suite, fails above 40 Ninja steps (the warm cache was missed) |
+| `smoke` | builds `test/fixtures/swarm-hello`, runs its test.py suite, fails above 40 Ninja steps (the warm cache was missed); `--strict-warnings`, `--quality-modules` and `--coverage` do what they promise, and the image's `gcovr` reports the module's coverage |
 
 | `integration` | ns-3 actually simulates: the tutorial `first`; the routing modules' own examples `aodv-example` (must deliver), `dsdv-manet` and `olsr-hna` (must deliver); and [`manet-canary`](test/fixtures/manet-canary/) (16 nodes, random waypoint) with AODV, OLSR and DSDV, dense (must deliver) and sparse (partitioned), each under a wall-clock budget: a run that does not finish is a hang |
 
-| `unit` | ns-3's own QUICK unit suites (`test.py -c unit -f QUICK`) for the modules in [`test/ns3-suites.txt`](test/ns3-suites.txt): the MANET stack (core, network, internet, mobility, wifi, propagation, aodv, olsr, dsdv, mesh) on `debug` and `sanitized`, core/network/internet on `default` and `optimized`; their test libraries are built in the throwaway container |
+| `unit` | ns-3's own QUICK unit suites (`test.py -c unit -f QUICK`) for the modules in [`test/ns3-suites.txt`](test/ns3-suites.txt): the MANET stack (core, network, internet, mobility, wifi, propagation, aodv, olsr, dsdv, mesh, the `full` group) on `debug` and `sanitized`, core/network/internet (`light`) on `default` and `optimized`; `UNIT_SET=full\|light` overrides the profile's group. Their test libraries are built in the throwaway container. Every suite's time is in the job log, the 15 slowest in the step summary |
 
 Unit-stage cost per image (ns-3.49, GitHub-hosted runner, measured in #51's run):
 
@@ -188,6 +195,51 @@ Unit-stage cost per image (ns-3.49, GitHub-hosted runner, measured in #51's run)
 | `3.49-slim` | light | 134 | 251 s | 90 s |
 
 The sanitized image's unit stage (~55 min) sets the length of a pipeline run.
+
+**Split test jobs (#86).** A profile with a `split <profile> <N>` line in
+[`test/ns3-suites.txt`](test/ns3-suites.txt) is tested by parallel jobs of
+the same run, all on the same candidate digest. One job runs every stage but
+`unit` (`test/run.sh --stages labels,...,integration`). The unit stage runs
+as one job (N = 1) or as N shards (`--stages unit --unit-shard i/N`), each
+listed as `shard <group> i/N <module>...`. The shards must list every module
+of the group exactly once: `tools/ns3_matrix.py --check-suites` fails the
+pipeline's first job otherwise, and `test/unit.sh` refuses such a shard at
+run time. Each job leaves its own pass marker, and promote tags the digest
+only when every job of the image passed (`tools/pass_markers.py`).
+`test/run.sh` with no option still runs everything, as local runs, fork PRs
+and on-demand builds do.
+
+Today only `sanitized` is split, as `split sanitized 1`: the stages but unit
+(712 s in #89's run) run beside the unit stage (2475 s). The unit stage stays
+one job because its wall time is one suite. `ns3-tcp-cubic` (internet) takes
+1936 s under ASan+UBSan, and the other 212 suites (5022 s of suite time) fit
+on the remaining three cores beside it. No shard split can finish below that
+suite, and an internet-only shard would save about 6 more minutes for about
+23 more runner-minutes.
+
+**Pull requests run a smaller unit set (#87).** On a pull request the
+Debian, slim and Alpine images run the `light` group: they differ from
+Ubuntu's only in the base OS, and the `full` group on all three cost about
+40 runner-minutes per PR run. Ubuntu `debug` and `sanitized` still run
+`full` on every PR. A PR never tags anything: every push to `main` runs every
+stage on every image, each with its profile's group (`full` on every debug
+and sanitized image), before the digest is promoted. The workflow sets
+`UNIT_SET` from the event and the matrix entry (`pr_unit_set` in
+`tools/ns3_matrix.py`); `test/run.sh` without it runs the profile's group,
+as a local run, a schedule or a dispatch does.
+The step summary says which set ran and why.
+
+**Some suites run on `main` only (#86, maintainer decision (c)).** On a pull
+request (`UNIT_PR=1`, set by the workflow) every image's unit stage leaves
+out the suites on the `main-only` line of
+[`test/ns3-suites.txt`](test/ns3-suites.txt), whatever its group. Today that
+is `ns3-tcp-cubic` (internet, so in both groups): one upstream suite that
+took 1343–1936 s under ASan+UBSan, 470 s on `debug` and 348 of the 350 s of
+`test.py` on the light Debian images, and so set both the sanitized job's
+wall time and most of a PR run's runner minutes. The job log and the step
+summary name each deferred suite (a SKIP note). Pushes to `main`, schedule
+and dispatch runs, and any run without `UNIT_PR`, run it; promotion happens
+only on `main`, so every published image is still tested with it.
 
 [`test/known-failures.txt`](test/known-failures.txt) lists upstream ns-3 bugs
 expected on one exact ns-3 version; each shows in the step summary as XFAIL,
@@ -224,7 +276,8 @@ summary.
 [`publish-images.yml`](.github/workflows/publish-images.yml) builds each image
 **once** and pushes it to the candidate package `ghcr.io/swarm-routing/ns3-dev-ci`
 (not for consumers; each clean run, PRs included, deletes its own, and a daily job sweeps leftovers and the cache's untagged versions). The tests run on that candidate
-**by digest**. Only an image whose tests passed gets its `ns3-dev` tags, as a
+**by digest** (in one job, or in parallel jobs on that same digest for a
+split profile). Only an image all of whose test jobs passed gets its `ns3-dev` tags, as a
 byte-identical copy of the tested digest (no rebuild), then a keyless cosign
 signature, a provenance attestation and a CycloneDX SBOM attestation (the
 OS packages plus ns-3 itself; see [SECURITY.md](SECURITY.md#verifying-what-it-ships)),

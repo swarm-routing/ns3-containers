@@ -17,8 +17,12 @@ name: Publish images
 #   build    each image is built ONCE and pushed to the candidate package
 #            ns3-dev-ci (never pulled by consumers); its digest is recorded
 #   test     every test stage (test/run.sh) runs on <candidate>@<digest>,
-#            the image that build produced -- never a rebuild, never a tag
-#   promote  an image whose tests passed gets its versioned and -<sha7> tags
+#            the image that build produced -- never a rebuild, never a tag.
+#            An image whose profile has a `split` line in test/ns3-suites.txt
+#            (sanitized) is tested by several parallel jobs on that same
+#            digest: every stage but unit, and the unit stage (one job, or N
+#            shards) (#86); each job leaves its own pass marker
+#   promote  an image all of whose test jobs passed gets its versioned and -<sha7> tags
 #            by `imagetools create` from that same digest (a carbon copy, no
 #            rebuild), then is signed and attested by digest; a
 #            non-blocking Trivy CVE report of that digest goes to code scanning
@@ -31,7 +35,13 @@ name: Publish images
 #            experimental: it never blocks)
 #
 # Automatic and on-demand builds go through the same jobs and the same tests
-# (ns3-containers#36). A fork PR cannot push a candidate: its build job loads
+# (ns3-containers#36). Two exceptions, on pull requests only: the Debian,
+# slim and Alpine images run the `light` unit group (UNIT_SET, from the
+# matrix entry's pr_unit_set; #87), Ubuntu debug and sanitized keep `full`;
+# and every image leaves out the suites on test/ns3-suites.txt's `main-only`
+# line (UNIT_PR=1; ns3-tcp-cubic, #86). A PR never tags, and every push to
+# main runs every stage with each image's full profile group, main-only
+# suites included, before it promotes the digest. A fork PR cannot push a candidate: its build job loads
 # the image and runs the same test/run.sh on it in place.
 #
 # The downstream canary gates only the rolling latest-* tags, not the
@@ -43,7 +53,10 @@ name: Publish images
 # candidate to pull and skip it.
 #
 #   push to main (docker/, test/, tools/, this file)  supported release: build + test + promote
-#   pull request (same paths)                          supported release: build + test
+#   pull request (same paths)                          supported release: build + test; the
+#                                                      Debian, slim and Alpine images run the
+#                                                      `light` unit group (UNIT_SET, #87); the
+#                                                      main-only suites wait for main (UNIT_PR, #86)
 #   pull request (any other change)                    nothing built: resolve yields an empty matrix
 #   schedule (weekly)                                  supported release, only if not yet published
 #   workflow_dispatch                                  `versions` (any release, on demand), else
@@ -115,10 +128,15 @@ jobs:
     timeout-minutes: 10
     outputs:
       matrix: ${{ steps.m.outputs.matrix }}
+      tests: ${{ steps.m.outputs.tests }}
       count: ${{ steps.m.outputs.count }}
       canary: ${{ steps.m.outputs.canary }}
       canary_count: ${{ steps.m.outputs.canary_count }}
     steps:
+      - name: Harden the runner (audit egress)
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
@@ -139,9 +157,11 @@ jobs:
             printf '%s\n' "$files" | grep -qE '^(docker|test|tools)/|^\.github/workflows/publish-images\.yml$' || images=false
           fi
           echo "images=$images" >> "$GITHUB_OUTPUT"
-      - name: Test the matrix generator
+      - name: Test the matrix generator and the unit shards
         if: steps.changes.outputs.images == 'true'
-        run: python3 -m unittest discover -s tools -v
+        run: |
+          python3 -m unittest discover -s tools -v
+          python3 tools/ns3_matrix.py --check-suites
       - name: Validate the downstream consumer list
         run: test/downstream.sh --check
       - name: Generate the matrix from upstream tags
@@ -163,8 +183,9 @@ jobs:
             echo "no image path changed: nothing to build" >> "$GITHUB_STEP_SUMMARY"
           fi
           count=$(printf '%s' "$matrix" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["include"]))')
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
-          echo "count=$count" >> "$GITHUB_OUTPUT"
+          # One test job per image and test part (#86): split images get several.
+          tests=$(printf '%s' "$matrix" | python3 -c 'import json,sys; sys.path.insert(0, "tools"); import ns3_matrix as m; print(json.dumps({"include": m.test_matrix(json.load(sys.stdin)["include"])}, separators=(",", ":")))')
+          { echo "matrix=$matrix"; echo "tests=$tests"; echo "count=$count"; } >> "$GITHUB_OUTPUT"
           # The downstream canary runs on the ubuntu debug image of each
           # release (what consumers' CI builds on; test/downstream.sh).
           canary=$(printf '%s' "$matrix" | python3 -c 'import json,sys; m=json.load(sys.stdin); print(json.dumps({"include": [e for e in m["include"] if e["os"] == "ubuntu" and e["profile"] == "debug"]}))')
@@ -188,6 +209,10 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.resolve.outputs.matrix) }}
     steps:
+      - name: Harden the runner (audit egress)
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Log in to GHCR
@@ -247,10 +272,12 @@ jobs:
           EXPECT_OS: ${{ matrix.os }}
           EXPECT_REVISION: ${{ github.sha }}
           EXPECT_BUILD_RUN: ${{ github.run_id }}-${{ github.run_attempt }}
+          UNIT_SET: ${{ github.event_name == 'pull_request' && matrix.pr_unit_set || '' }}
+          UNIT_PR: ${{ github.event_name == 'pull_request' && '1' || '' }}
         run: test/run.sh "ns3-dev-local:${NAME}"
 
   test:
-    name: test ${{ matrix.name }}
+    name: test ${{ matrix.test_name }}
     needs: [resolve, build]
     # Run each image's tests even if another image failed to build; a leg
     # whose own build failed finds no digest and fails here, which is right.
@@ -263,8 +290,14 @@ jobs:
       packages: read       # pull the candidate; tests can never push or tag
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.resolve.outputs.matrix) }}
+      # One job per image and test part: a split image (sanitized) runs its
+      # unit stage beside its other stages, each on the same candidate digest (#86).
+      matrix: ${{ fromJSON(needs.resolve.outputs.tests) }}
     steps:
+      - name: Harden the runner (audit egress)
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -293,20 +326,32 @@ jobs:
           EXPECT_OS: ${{ matrix.os }}
           EXPECT_REVISION: ${{ github.sha }}
           EXPECT_BUILD_RUN: ${{ steps.pull.outputs.build_run }}
-        run: test/run.sh "$REF"
+          # Pull requests only: the OS variants run the light unit group (#87),
+          # and the main-only suites of test/ns3-suites.txt wait for main (#86).
+          UNIT_SET: ${{ github.event_name == 'pull_request' && matrix.pr_unit_set || '' }}
+          UNIT_PR: ${{ github.event_name == 'pull_request' && '1' || '' }}
+          STAGES: ${{ matrix.stages }}
+          SHARD: ${{ matrix.unit_shard }}
+        run: |
+          args=()
+          [ -n "$STAGES" ] && args+=(--stages "$STAGES")
+          [ -n "$SHARD" ] && args+=(--unit-shard "$SHARD")
+          test/run.sh "${args[@]}" "$REF"
       - name: Mark as passed
         run: mkdir -p pass && cp marker/digest pass/digest
+      # One marker per test part; promote needs every part's (#86).
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: passed-${{ matrix.name }}
+          name: passed-${{ matrix.name }}--${{ matrix.part }}
           path: pass/digest
           retention-days: 1
 
   promote:
     name: promote ${{ matrix.name }}
     needs: [resolve, test]
-    # Per image: an image is tagged only if its own tests passed (its
-    # passed-<name> marker exists), whatever happened to the others.
+    # Per image: an image is tagged only if every one of its test jobs
+    # passed (a passed-<name>--<part> marker per part, all naming the same
+    # digest), whatever happened to the others.
     if: ${{ !cancelled() && needs.resolve.outputs.count != '0' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -321,25 +366,30 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.resolve.outputs.matrix) }}
     steps:
+      - name: Harden the runner (audit egress)
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Find this image's pass marker
+      - name: Find this image's pass markers
         id: passed
         continue-on-error: true
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: passed-${{ matrix.name }}
+          pattern: passed-${{ matrix.name }}--*
           path: pass
-      - name: Stop if its tests did not pass
+      - name: Stop unless every test part passed
         id: gate
         env:
           NAME: ${{ matrix.name }}
+          PARTS: ${{ toJSON(matrix.test_parts) }}
         run: |
-          if [ ! -s pass/digest ]; then
-            echo "::error::$NAME did not pass its tests: no tag is created"
+          if ! digest=$(python3 tools/pass_markers.py pass "$NAME" "$PARTS"); then
+            echo "::error::$NAME did not pass every test job: no tag is created"
             echo "$NAME: not promoted (tests did not pass)" >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
-          echo "digest=$(cat pass/digest)" >> "$GITHUB_OUTPUT"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Log in to GHCR
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -486,10 +536,11 @@ jobs:
       matrix: ${{ fromJSON(needs.resolve.outputs.canary) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # Only an image that passed test/run.sh is canaried.
+      # Only an image that passed test/run.sh is canaried: every test part
+      # left its marker and all name the same digest (tools/pass_markers.py).
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: passed-${{ matrix.name }}
+          pattern: passed-${{ matrix.name }}--*
           path: pass
       - name: Log in to GHCR
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -499,8 +550,12 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Pull the candidate by digest
         id: pull
+        env:
+          NAME: ${{ matrix.name }}
+          PARTS: ${{ toJSON(matrix.test_parts) }}
         run: |
-          ref="${CANDIDATE}@$(cat pass/digest)"
+          digest=$(python3 tools/pass_markers.py pass "$NAME" "$PARTS")
+          ref="${CANDIDATE}@${digest}"
           docker pull "$ref"
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
       - name: Build and test the org's modules (test/downstream.txt)
@@ -555,6 +610,11 @@ jobs:
       contents: read
       packages: write
     steps:
+      - name: Harden the runner (audit egress)
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: passed-*
@@ -571,14 +631,12 @@ jobs:
           MATRIX: ${{ needs.resolve.outputs.matrix }}
         run: |
           echo "every downstream canary passed (the *downstream canary* jobs' summaries list each consumer and commit)" >> "$GITHUB_STEP_SUMMARY"
-          printf '%s' "$MATRIX" | python3 -c 'import json,sys; [print(e["name"], e["latest_tags"]) for e in json.load(sys.stdin)["include"] if e["latest_tags"]]' |
-          while read -r name tags; do
-            f="pass/passed-${name}/digest"
-            if [ ! -s "$f" ]; then
+          printf '%s' "$MATRIX" | python3 -c 'import json,sys; [print(e["name"], json.dumps(e["test_parts"], separators=(",", ":")), e["latest_tags"]) for e in json.load(sys.stdin)["include"] if e["latest_tags"]]' |
+          while read -r name parts tags; do
+            if ! digest=$(python3 tools/pass_markers.py pass "$name" "$parts"); then
               echo "$name: did not pass (experimental), latest tags left as they are" >> "$GITHUB_STEP_SUMMARY"
               continue
             fi
-            digest=$(cat "$f")
             # An experimental image can pass its tests and still fail to be
             # promoted (its promote leg may fail without failing the run);
             # its digest is then not in ns3-dev and its latest tags stay put.
@@ -613,6 +671,10 @@ jobs:
       contents: read
       packages: write
     steps:
+      - name: Harden the runner (audit egress)
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: digest-*
@@ -671,6 +733,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Harden the runner (audit egress)
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
       - env:
           NEEDS: ${{ toJSON(needs) }}
         run: |
