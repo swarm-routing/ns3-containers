@@ -8,11 +8,15 @@
 publish-images.yml tests one image in one or more jobs (its `test_parts`
 from tools/ns3_matrix.py: everything in one job, or the stages but unit plus
 N unit shards, ns3-containers#86). Each job that passes uploads the digest it
-tested as the artifact passed-<name>--<part>; downloaded by pattern, each
-lands at <dir>/passed-<name>--<part>/digest. The image may be promoted only
-when every part left its marker and all of them name the same digest: then
-this prints that digest and exits 0. Otherwise it says what is missing on
-stderr and exits 1.
+tested as the artifact passed-<name>--<part>; downloaded by the pattern
+passed-<name>--*, each lands at <dir>/passed-<name>--<part>/digest, except
+that actions/download-artifact unpacks a pattern that matches exactly one
+artifact straight into <dir>, as <dir>/digest (ns3-containers#101). That flat
+marker names no part, so it counts only for an image tested in a single part:
+the pattern can then only have matched that part's marker. For a split image
+it never stands in for a part. The image may be promoted only when every part
+left its marker and all of them name the same digest: then this prints that
+digest and exits 0. Otherwise it says what is missing on stderr and exits 1.
 """
 
 from __future__ import annotations
@@ -20,6 +24,14 @@ from __future__ import annotations
 import json
 import os
 import sys
+
+
+def _read(path):
+    try:
+        with open(path) as fh:
+            return fh.read().strip()
+    except OSError:
+        return ""
 
 
 def digest_of(root, name, parts):
@@ -37,11 +49,10 @@ def digest_of(root, name, parts):
         marker = f"passed-{name}--{p['part']}"
         d = ""
         if marker in markers:
-            try:
-                with open(os.path.join(markers[marker], "digest")) as fh:
-                    d = fh.read().strip()
-            except OSError:
-                pass
+            d = _read(os.path.join(markers[marker], "digest"))
+        elif len(parts) == 1 and not markers:
+            # One part, one matching artifact: download-artifact put it flat.
+            d = _read(os.path.join(root, "digest"))
         if not d:
             raise ValueError(f"{name}: test part '{p['part']}' did not pass (no {root}/{marker}/digest)")
         seen[p["part"]] = d

@@ -349,6 +349,8 @@ jobs:
         with:
           egress-policy: audit
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # One matching artifact lands flat in pass/, several each in
+      # pass/<artifact>/: pass_markers.py reads both (#101).
       - name: Find this image's pass markers
         id: passed
         continue-on-error: true

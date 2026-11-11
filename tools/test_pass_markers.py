@@ -27,6 +27,53 @@ class PassMarkers(unittest.TestCase):
         with open(os.path.join(d, "digest"), "w") as f:
             f.write(digest + "\n")
 
+    def mark_flat(self, digest="sha256:aa"):
+        # download-artifact's layout when the pattern matches one artifact (#101).
+        with open(os.path.join(self.root, "digest"), "w") as f:
+            f.write(digest + "\n")
+
+    def test_one_matching_artifact_unpacked_flat(self):
+        # 3.49-default is tested in one part: its only marker lands at <dir>/digest.
+        self.mark_flat()
+        self.assertEqual(pm.digest_of(self.root, "3.49-default", [{"part": "all"}]), "sha256:aa")
+        self.assertEqual(pm.main([self.root, "3.49-default", '[{"part": "all"}]']), 0)
+
+    def test_one_matching_artifact_in_its_own_directory(self):
+        self.mark("3.49-default", "all")
+        self.assertEqual(pm.digest_of(self.root, "3.49-default", [{"part": "all"}]), "sha256:aa")
+
+    def test_flat_marker_never_stands_in_for_a_split_images_part(self):
+        # A split image whose pattern matched one artifact: the other parts did not pass.
+        self.mark_flat()
+        with self.assertRaisesRegex(ValueError, "did not pass"):
+            pm.digest_of(self.root, "3.49-sanitized", PARTS)
+        with self.assertRaisesRegex(ValueError, "did not pass"):
+            pm.digest_of(self.root, "3.49-sanitized", [{"part": "base"}, {"part": "unit"}])
+
+    def test_flat_marker_ignored_beside_per_artifact_directories(self):
+        # Several matched: only the per-artifact directories count.
+        self.mark_flat("sha256:bb")
+        self.mark("3.49-default", "other")
+        with self.assertRaisesRegex(ValueError, "'all' did not pass"):
+            pm.digest_of(self.root, "3.49-default", [{"part": "all"}])
+
+    def test_empty_flat_marker_blocks(self):
+        self.mark_flat("")
+        with self.assertRaisesRegex(ValueError, "did not pass"):
+            pm.digest_of(self.root, "3.49-default", [{"part": "all"}])
+
+    def test_no_marker_at_all_blocks(self):
+        with self.assertRaisesRegex(ValueError, "did not pass"):
+            pm.digest_of(self.root, "3.49-default", [{"part": "all"}])
+        with self.assertRaisesRegex(ValueError, "did not pass"):
+            pm.digest_of(os.path.join(self.root, "missing"), "3.49-default", [{"part": "all"}])
+
+    def test_several_matching_artifacts_each_in_its_own_directory(self):
+        self.mark("3.49-sanitized", "base")
+        self.mark("3.49-sanitized", "unit")
+        self.assertEqual(
+            pm.digest_of(self.root, "3.49-sanitized", [{"part": "base"}, {"part": "unit"}]), "sha256:aa")
+
     def test_every_part_passed(self):
         for p in PARTS:
             self.mark("3.49-sanitized", p["part"])
