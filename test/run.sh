@@ -141,13 +141,21 @@ labels() {
 # Gates: fixable vulnerabilities of MEDIUM or higher (the maintainer's
 # threshold), any secret in the image (files, and ENV/history in its config), HIGH+ Dockerfile misconfigurations
 # except the ones accepted with a reason in .trivyignore. Behind a
-# TLS-intercepting proxy set TRIVY_CA to its CA bundle.
+# TLS-intercepting proxy set TRIVY_CA to its CA bundle. TRIVY_CACHE (default
+# $RUNNER_TEMP/trivy-cache) is Trivy's cache directory; the pipeline restores
+# the vulnerability DB and checks bundle its resolve job fetched into it and
+# sets TRIVY_SKIP_DB_UPDATE=true and TRIVY_SKIP_CHECK_UPDATE=true, which are
+# passed to Trivy, so a test job downloads neither (#86, #87). Unset, Trivy
+# fetches whatever is missing or stale, as it always did.
 TRIVY=ghcr.io/aquasecurity/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
 trivy() {
     local cache=${TRIVY_CACHE:-${RUNNER_TEMP:-/tmp}/trivy-cache} extra=()
     mkdir -p "$cache"
     if [ -n "${TRIVY_CA:-}" ]; then extra+=(-e SSL_CERT_FILE=/ca.crt -v "$TRIVY_CA:/ca.crt:ro"); fi
     if [ -n "${HTTPS_PROXY:-}" ]; then extra+=(-e HTTPS_PROXY); fi
+    for v in TRIVY_SKIP_DB_UPDATE TRIVY_SKIP_CHECK_UPDATE; do
+        if [ -n "${!v:-}" ]; then extra+=(-e "$v"); fi
+    done
     docker run --rm --network host -v /var/run/docker.sock:/var/run/docker.sock \
         -v "$cache:/root/.cache" -v "$repo:/repo:ro" "${extra[@]}" "$TRIVY" "$@"
 }
