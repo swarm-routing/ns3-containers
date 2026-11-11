@@ -7,11 +7,14 @@
 #
 #   docker run --rm -v "$PWD:/src:ro" <image> bash /src/test/unit.sh
 #
-# The images ship with only `core`'s tests built. This reconfigures the tree in
-# the throwaway container with the image's own recorded flags and the
-# examples/tests filter set to the modules of one group in test/ns3-suites.txt,
-# builds their test libraries, and runs `test.py -c unit -f QUICK`, all within
-# one BUDGET (default 90 min). The published image is never changed.
+# The debug and sanitized images ship with the `full` group's test libraries
+# built (docker/Dockerfile, #86, #87), the others with only `core`'s. This
+# reconfigures the tree in the throwaway container with the image's own
+# recorded flags and the examples/tests filter set to the modules of one group
+# in test/ns3-suites.txt, builds `test-runner` and the test libraries it links
+# (no examples: test.py -c unit runs none; up to date on debug and sanitized
+# but for the link), and runs `test.py -c unit -f QUICK`, all within one
+# BUDGET (default 90 min). The published image is never changed.
 #
 # UNIT_SET=full|light picks the group. Unset, the profile picks it: `full` on
 # debug and sanitized, `light` on default and optimized. The pipeline sets
@@ -97,8 +100,8 @@ else
     echo "  SKIP  filter: this release has no --filter-module-examples-and-tests; running every built suite"
 fi
 start=$(date +%s)
-./ns3 build >/tmp/build.log 2>&1 || { tail -40 /tmp/build.log; echo "unit: build failed" >&2; exit 1; }
-echo "unit: test libraries built in $(( $(date +%s) - start )) s"
+./ns3 build test-runner >/tmp/build.log 2>&1 || { tail -40 /tmp/build.log; echo "unit: build failed" >&2; exit 1; }
+echo "unit: test libraries built in $(( $(date +%s) - start )) s ($(grep -cE '^\[[0-9]+/[0-9]+\]' /tmp/build.log) Ninja steps)"
 
 if [ -n "$deferred" ]; then
     # test.py has no exclude option: it runs what the test runner's

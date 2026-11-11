@@ -113,6 +113,25 @@ check_cache NS3_EXAMPLES ON                # rule 10: the shared configure line
 check_cache NS3_TESTS ON
 check_cache NS3_WARNINGS_AS_ERRORS OFF
 
+echo "structure: pre-built unit test libraries (debug and sanitized: the full group)"
+case "${BUILD_PROFILE:-}" in
+    debug|sanitized)
+        full=$(awk '{sub(/#.*/, "")} $1 == "full" {$1=""; print}' /src/test/ns3-suites.txt 2>/dev/null | xargs)
+        if [ -z "$full" ]; then
+            skip "no full group in /src/test/ns3-suites.txt to compare with"
+        else
+            missing=""
+            for m in $full; do
+                compgen -G "$NS3/build/lib/libns3*-${m}-test*.so" >/dev/null || missing="$missing $m"
+            done
+            [ -z "$missing" ] && ok "test libraries of the full group built ($full)" \
+                || bad "test libraries not pre-built:$missing (docker/Dockerfile NS3_TEST_MODULES)"
+        fi
+        [ -x "$(compgen -G "$NS3/build/utils/*test-runner*" | grep -v '\.real$' | head -1)" ] \
+            && ok "test-runner built" || bad "no test-runner in $NS3/build/utils" ;;
+    *) skip "the ${BUILD_PROFILE:-?} profile builds its unit test libraries in the unit stage" ;;
+esac
+
 echo "structure: gcovr (debug and sanitized only)"
 want_gcovr=$(sed -n 's/^gcovr==//p' /src/docker/gcovr-requirements.in 2>/dev/null)
 case "${BUILD_PROFILE:-}" in
