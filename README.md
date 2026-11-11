@@ -246,8 +246,31 @@ expected on one exact ns-3 version; each shows in the step summary as XFAIL,
 and an expected failure that passes fails the stage. Today:
 **ns-3.49's stock AODV hangs in the sparse run** (#35).
 
-More stages are coming (#36): security, fixed-seed regression and a
-downstream canary.
+More stages are coming (#36): fixed-seed regression.
+
+**Downstream canary** (#44). Before `latest-*` moves, every org ns-3 module
+listed in [`test/downstream.txt`](test/downstream.txt) is built and tested on
+the new ubuntu `debug` candidate by `test/downstream.sh <image>`: today
+`ns3-swarm-core` (`swarm-core`), `ns3-tools` (`routing-bench` + its stock-arm
+delivery check, without `aodv` while #35 lasts) and AntHocNet (its six
+modules staged by `make install-ns3`, its suites and `anthocnet-example`);
+ARA, BeeAdHoc, Termite and HOPNET are listed and skipped with the reason
+until they have an `ns3/` module. Each consumer runs in a fresh container
+under a wall-clock budget, at the commit of its `main` shown in the step
+summary.
+
+- **The contract for a consumer:** one line in `test/downstream.txt`
+  (`name | owner/repo@ref | ns-3 range | modules | suites | stage | run`), or
+  a `ci/canary.sh` in the consumer's repository, which then runs instead
+  (in its checkout, inside the image; exit 0 = pass). The ns-3 range
+  (`3.42+`, `3.36-3.48`) decides which on-demand `versions` builds run it.
+- **The gate:** on `main`, `latest-*` moves only if every consumer passes;
+  a failure leaves `latest` on the previous digest and opens (or comments on)
+  an issue here per consumer and release, with the log. The versioned and
+  `-<sha7>` tags are not held back: the image passed its own tests.
+- **Pull requests** run the canary as an advisory job (a consumer's own
+  breakage must not fail an unrelated image PR); fork PRs, which push no
+  candidate, skip it.
 
 **What is tested is what is published.**
 [`publish-images.yml`](.github/workflows/publish-images.yml) builds each image

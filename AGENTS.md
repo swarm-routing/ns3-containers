@@ -33,10 +33,12 @@ test/integration.sh               ns-3 simulates: tutorial `first` + manet-canar
 test/unit.sh                      ns-3's own QUICK unit suites for the modules in test/ns3-suites.txt (full on debug/sanitized; UNIT_SET=light|full overrides, light on PRs for the OS variants); prints every suite's time
 test/ns3-suites.txt               which modules' suites the unit stage runs, per profile group; `split`/`shard` lines: which profiles test in parallel jobs (#86); `main-only`: suites pull requests leave out (#86)
 test/known-failures.txt           upstream bugs expected on one exact ns-3 version (strict XFAIL, shown in the summary)
+test/downstream.sh                the downstream canary: clone, stage, ns3-build-contrib --test and run each consumer in test/downstream.txt on one image (ubuntu debug only; --check validates the list); gates latest-*
+test/downstream.txt               the org's ns-3 modules the canary builds (name | repo@ref | ns-3 range | modules | suites | stage | run); a new protocol is one line
 test/fixtures/swarm-hello/        minimal contrib module (C++17..C++23) used by the smoke (GPL-2.0-only: an ns-3 module)
 test/fixtures/manet-canary/       short MANET program for the integration stage (GPL-2.0-only)
 test/fixtures/profile-probe/      one deliberate assert/log/memory bug per mode, for the profile stage (GPL-2.0-only)
-.github/workflows/publish-images.yml   resolve -> build once (candidate in ns3-dev-ci) -> test by digest -> promote = retag the same digest (main) -> sign -> attest -> CVE report to code scanning (non-blocking) -> latest-* -> discard this run's candidates (PRs too); weekly new release; `versions` = on demand; `refresh` = OS security refresh of the supported release (REFRESH=<run id>, --tier latest); runs on every PR (other paths: empty matrix), `images gate` is the check to require
+.github/workflows/publish-images.yml   resolve -> build once (candidate in ns3-dev-ci) -> test by digest -> promote = retag the same digest (main) -> sign -> attest -> CVE report to code scanning (non-blocking); downstream canary on the ubuntu debug candidate (advisory on PRs, opens/updates an issue on main) -> latest-* -> discard this run's candidates (PRs too); weekly new release; `versions` = on demand; `refresh` = OS security refresh of the supported release (REFRESH=<run id>, --tier latest); runs on every PR (other paths: empty matrix), `images gate` is the check to require
 .github/workflows/container-security.yml   every push/PR: hadolint (gate) and a Trivy config scan, both as SARIF to code scanning (the image CVE report is in publish-images' promote job)
 .github/workflows/pr-title.yml         the PR title is a lowercase Conventional Commit (reusable-pr-title.yml)
 .github/workflows/candidates-cleanup.yml   daily: ns3-dev-ci candidates left by failed runs (> 7 days), untagged ns3-dev-cache versions (> 1 day); never ns3-dev
@@ -52,6 +54,8 @@ docker build -f docker/Dockerfile --build-arg NS3_VERSION=3.48 \
     --build-arg BUILD_PROFILE=debug -t ns3-dev:3.48-debug .        # ~8-15 min on 4 cores
 EXPECT_VERSION=3.48 EXPECT_PROFILE=debug EXPECT_OS=ubuntu \
     test/run.sh ns3-dev:3.48-debug                                 # every test stage, as CI runs them
+test/downstream.sh --check                                         # the consumer list parses (no docker)
+test/downstream.sh ns3-dev:3.48-debug                              # every org module builds and passes on the image (latest-* gate)
 hadolint docker/Dockerfile                                       # reads .hadolint.yaml; exit 0 required
 shellcheck docker/scripts/build-contrib.sh test/*.sh
 actionlint .github/workflows/*.yml
