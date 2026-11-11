@@ -44,6 +44,18 @@ name: Publish images
 # suites included, before it promotes the digest. A fork PR cannot push a candidate: its build job loads
 # the image and runs the same test/run.sh on it in place.
 #
+# A pull request also tests only the images it affects (#86, #87; the
+# `select` job, tools/pr_tests.py). An image whose content (layers and config,
+# without the two per-build labels) equals the one main last tested and
+# promoted under its versioned tag is not tested again when no test input
+# (test/, the test wiring, .trivyignore) changed since main tested it: the
+# summary says "unchanged digest, already tested on main". If only test
+# inputs changed, the stages they feed run on the representative images
+# (`representative` in tools/ns3_matrix.py: Ubuntu debug, sanitized and
+# optimized, Debian debug, slim default, Alpine debug). An image whose content
+# differs runs every test job. Pushes to main, schedule and dispatch runs
+# test every image with every stage, as before, and only they promote.
+#
 # The downstream canary gates only the rolling latest-* tags, not the
 # versioned and -<sha7> tags: it tests the consumers on the image, not the
 # image's own contract (test/run.sh does that), and a consumer's bug must not
@@ -57,6 +69,8 @@ name: Publish images
 #                                                      Debian, slim and Alpine images run the
 #                                                      `light` unit group (UNIT_SET, #87); the
 #                                                      main-only suites wait for main (UNIT_PR, #86)
+#                                                      and only the images and stages the PR
+#                                                      affects are tested (select, #86, #87)
 #   pull request (any other change)                    nothing built: resolve yields an empty matrix
 #   merge group (the merge queue, .github#130)         as a pull request (diffed against the
 #                                                      group's base, merge_group.base_sha), but
@@ -222,6 +236,9 @@ jobs:
         with:
           egress-policy: audit
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # A fork PR picks its tests here (tools/pr_tests.py diffs from main's tested commit).
+          fetch-depth: ${{ env.WRITE_REGISTRY == 'true' && 1 || 0 }}
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Log in to GHCR
         if: env.WRITE_REGISTRY == 'true'
@@ -271,8 +288,24 @@ jobs:
             marker/digest
             marker/build-run
           retention-days: 1
-      - name: Test in place (fork PR, no candidate)
+      # The same choice the select job makes for same-repo PRs, read-only:
+      # the loaded image against the public one main promoted.
+      - name: Pick the tests (fork PR)
+        id: pick
         if: env.WRITE_REGISTRY != 'true'
+        env:
+          NAME: ${{ matrix.name }}
+          ENTRY: ${{ toJSON(matrix) }}
+          TAGS: ${{ matrix.tags }}
+        run: |
+          docker image inspect "ns3-dev-local:${NAME}" > candidate.json
+          read -r ref _ <<<"$TAGS"
+          docker buildx imagetools inspect "${IMAGE}:${ref}" --format '{{json .Image}}' > reference.json 2>/dev/null || : > reference.json
+          python3 tools/pr_tests.py decide --entry "$ENTRY" --candidate candidate.json --reference reference.json > pick.json
+          python3 -c 'import json; d=json.load(open("pick.json")); print("run=" + ("true" if d["run"] else "false")); print("stages=" + d["stages"])' >> "$GITHUB_OUTPUT"
+          python3 -c 'import json,os; print(os.environ["NAME"], "|", json.load(open("pick.json"))["reason"])' >> "$GITHUB_STEP_SUMMARY"
+      - name: Test in place (fork PR, no candidate)
+        if: env.WRITE_REGISTRY != 'true' && steps.pick.outputs.run == 'true'
         env:
           NAME: ${{ matrix.name }}
           EXPECT_VERSION: ${{ matrix.version }}
@@ -282,14 +315,84 @@ jobs:
           EXPECT_BUILD_RUN: ${{ github.run_id }}-${{ github.run_attempt }}
           UNIT_SET: ${{ github.event_name == 'pull_request' && matrix.pr_unit_set || '' }}
           UNIT_PR: ${{ github.event_name == 'pull_request' && '1' || '' }}
-        run: test/run.sh "ns3-dev-local:${NAME}"
+          STAGES: ${{ steps.pick.outputs.stages }}
+        run: |
+          args=()
+          [ -n "$STAGES" ] && args+=(--stages "$STAGES")
+          test/run.sh "${args[@]}" "ns3-dev-local:${NAME}"
+
+  # Which test jobs run. Pushes to main, schedule and dispatch: every one
+  # resolve listed. A pull request: only those of the images and stages it
+  # affects (tools/pr_tests.py; #86, #87), each image's candidate compared
+  # with what its versioned tag points to (what main last tested and
+  # promoted). The summary has a line per image saying what runs and why.
+  select:
+    name: select the tests
+    needs: [resolve, build]
+    if: ${{ !cancelled() && needs.resolve.outputs.count != '0' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read       # inspect the candidates
+    outputs:
+      tests: ${{ steps.s.outputs.tests }}
+      count: ${{ steps.s.outputs.count }}
+    steps:
+      - name: Harden the runner (audit egress)
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0   # the diff from the commit main tested each image at
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: github.event_name == 'pull_request'
+        with:
+          pattern: digest-*
+          path: digests
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        if: github.event_name == 'pull_request'
+      - name: Log in to GHCR
+        if: github.event_name == 'pull_request'
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Select
+        id: s
+        env:
+          EVENT: ${{ github.event_name }}
+          MATRIX: ${{ needs.resolve.outputs.matrix }}
+          RESOLVED: ${{ needs.resolve.outputs.tests }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            mkdir -p inspect
+            # A reference that cannot be read (none yet, a registry error)
+            # leaves no file: that image then runs every test job.
+            python3 tools/pr_tests.py refs --matrix "$MATRIX" --digests digests \
+                --candidate "$CANDIDATE" --image "$IMAGE" |
+            while read -r name kind ref; do
+              docker buildx imagetools inspect "$ref" --format '{{json .Image}}' > "inspect/${name}.${kind}.json" \
+                || { echo "::warning::cannot inspect $ref"; rm -f "inspect/${name}.${kind}.json"; }
+            done
+            tests=$(python3 tools/pr_tests.py select --matrix "$MATRIX" --inspect inspect --summary "$GITHUB_STEP_SUMMARY")
+          else
+            tests=$RESOLVED
+            echo "every test job of every image (${EVENT})" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          count=$(printf '%s' "$tests" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["include"]))')
+          { echo "tests=$tests"; echo "count=$count"; } >> "$GITHUB_OUTPUT"
+          echo "${count} test job(s)" >> "$GITHUB_STEP_SUMMARY"
 
   test:
     name: test ${{ matrix.test_name }}
-    needs: [resolve, build]
+    needs: [resolve, build, select]
     # Run each image's tests even if another image failed to build; a leg
     # whose own build failed finds no digest and fails here, which is right.
-    if: ${{ !cancelled() && needs.resolve.outputs.count != '0' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    # No job at all when select chose none (a PR whose images main already tested).
+    if: ${{ !cancelled() && needs.select.result == 'success' && needs.select.outputs.count != '0' }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     continue-on-error: ${{ matrix.experimental }}
@@ -300,7 +403,7 @@ jobs:
       fail-fast: false
       # One job per image and test part: a split image (sanitized) runs its
       # unit stage beside its other stages, each on the same candidate digest (#86).
-      matrix: ${{ fromJSON(needs.resolve.outputs.tests) }}
+      matrix: ${{ fromJSON(needs.select.outputs.tests) }}
     steps:
       - name: Harden the runner (audit egress)
         uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
@@ -670,16 +773,17 @@ jobs:
 
   discard:
     name: discard this run's candidates
-    needs: [resolve, test, promote, canary, latest]
+    needs: [resolve, select, test, promote, canary, latest]
     # Every run, PRs included, deletes the candidates it pushed once nothing
-    # needs them: after a clean run (tests passed and, on main, the tags were
-    # copied). A run with a failure keeps them, so "re-run failed jobs" can
+    # needs them: after a clean run (tests passed, or select chose none, and,
+    # on main, the tags were copied). A run with a failure keeps them, so "re-run failed jobs" can
     # still promote by digest; candidates-cleanup.yml removes those after 7
     # days. Fork PRs push no candidate.
     if: >-
       ${{ !cancelled() && needs.resolve.outputs.count != '0'
           && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-          && needs.test.result == 'success'
+          && needs.select.result == 'success'
+          && (needs.test.result == 'success' || (needs.test.result == 'skipped' && needs.select.outputs.count == '0'))
           && contains(fromJSON('["success","skipped"]'), needs.promote.result)
           && contains(fromJSON('["success","skipped"]'), needs.canary.result)
           && contains(fromJSON('["success","skipped"]'), needs.latest.result) }}
@@ -748,7 +852,7 @@ jobs:
   gate:
     name: images gate
     if: always()
-    needs: [resolve, build, test, promote, latest, discard]
+    needs: [resolve, build, select, test, promote, latest, discard]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

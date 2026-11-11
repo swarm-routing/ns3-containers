@@ -242,6 +242,35 @@ summary name each deferred suite (a SKIP note). Pushes to `main`, schedule
 and dispatch runs, and any run without `UNIT_PR`, run it; promotion happens
 only on `main`, so every published image is still tested with it.
 
+**Pull requests test only the images they affect (#86, #87).** Every image
+is still built (mostly cache hits), then the `select` job
+([`tools/pr_tests.py`](tools/pr_tests.py)) compares each candidate with the
+image its versioned tag (e.g. `3.49-debug`) points to, the one `main` last
+tested and promoted. The digests always differ (each build stamps its commit
+and run into two labels), so it compares the content: the layers and the
+config without those two labels. Then:
+
+| The PR's image | Test inputs* changed since `main` tested it | Tests |
+|---|---|---|
+| same content | none | none ("unchanged digest, already tested on main") |
+| same content | some | the stages they feed (plus `labels`), on the representative images only |
+| different content, or nothing to compare with | any | every test job, as before |
+
+\* `test/` (each script and fixture feeds its own stage; `test/run.sh` and
+unknown files feed every stage), `.trivyignore` (security), and the test
+wiring: `tools/ns3_matrix.py`, `tools/pass_markers.py`, `tools/pr_tests.py`,
+`publish-images.yml` (every stage). The diff runs from the commit the
+reference was tested at (its `revision` label) to the PR's head.
+
+The representatives are Ubuntu `debug`, `sanitized` and `optimized`, Debian
+`debug`, slim `default` and Alpine `debug`: every base and every profile
+once (`REPRESENTATIVES` in [`tools/ns3_matrix.py`](tools/ns3_matrix.py)).
+The step summary has a line per image saying what ran and why, and
+`images gate` passes when images are skipped. A fork PR makes the same choice
+read-only in its build job. Pushes to `main`, schedule and dispatch runs test
+every image with every stage, and only they promote: what is tagged is what
+was tested.
+
 [`test/known-failures.txt`](test/known-failures.txt) lists upstream ns-3 bugs
 expected on one exact ns-3 version; each shows in the step summary as XFAIL,
 and an expected failure that passes fails the stage. Today:
