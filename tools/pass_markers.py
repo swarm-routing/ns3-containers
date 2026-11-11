@@ -8,15 +8,13 @@
 publish-images.yml tests one image in one or more jobs (its `test_parts`
 from tools/ns3_matrix.py: everything in one job, or the stages but unit plus
 N unit shards, ns3-containers#86). Each job that passes uploads the digest it
-tested as the artifact passed-<name>--<part>; downloaded by the pattern
-passed-<name>--*, each lands at <dir>/passed-<name>--<part>/digest, except
-that actions/download-artifact unpacks a pattern that matches exactly one
-artifact straight into <dir>, as <dir>/digest (ns3-containers#101). That flat
-marker names no part, so it counts only for an image tested in a single part:
-the pattern can then only have matched that part's marker. For a split image
-it never stands in for a part. The image may be promoted only when every part
-left its marker and all of them name the same digest: then this prints that
-digest and exits 0. Otherwise it says what is missing on stderr and exits 1.
+tested as the artifact passed-<name>--<part>, holding
+passed-<name>--<part>/digest; downloaded by pattern with merge-multiple, each
+lands at <dir>/passed-<name>--<part>/digest however many artifacts matched
+(a bare <dir>/digest names no image or part and never counts, #101). The image may be promoted only
+when every part left its marker and all of them name the same digest: then
+this prints that digest and exits 0. Otherwise it says what is missing on
+stderr and exits 1.
 """
 
 from __future__ import annotations
@@ -26,14 +24,6 @@ import os
 import sys
 
 
-def _read(path):
-    try:
-        with open(path) as fh:
-            return fh.read().strip()
-    except OSError:
-        return ""
-
-
 def digest_of(root, name, parts):
     """The one digest every part's marker names, or raise ValueError saying why not."""
     if not parts:
@@ -41,20 +31,19 @@ def digest_of(root, name, parts):
     # The marker paths come from listing <dir>, never from joining argv into a
     # path: a name or part such as "../x" then matches no entry (Sonar S8707).
     try:
-        entries = list(os.scandir(root))
+        markers = {e.name: e.path for e in os.scandir(root) if e.is_dir()}
     except OSError:
-        entries = []
-    markers = {e.name: e.path for e in entries if e.is_dir()}
-    flat = next((e.path for e in entries if e.name == "digest" and e.is_file()), None)
+        markers = {}
     seen = {}
     for p in parts:
         marker = f"passed-{name}--{p['part']}"
         d = ""
         if marker in markers:
-            d = _read(os.path.join(markers[marker], "digest"))
-        elif len(parts) == 1 and not markers and flat:
-            # One part, one matching artifact: download-artifact put it flat.
-            d = _read(flat)
+            try:
+                with open(os.path.join(markers[marker], "digest")) as fh:
+                    d = fh.read().strip()
+            except OSError:
+                pass
         if not d:
             raise ValueError(f"{name}: test part '{p['part']}' did not pass (no {root}/{marker}/digest)")
         seen[p["part"]] = d
