@@ -168,6 +168,16 @@ def suites(text):
 GROUPS = "full  core network wifi aodv\nlight core network\n"
 
 
+class PrebuiltTestLibraries(unittest.TestCase):
+    """docker/Dockerfile pre-builds the `full` group's test libraries on debug and sanitized."""
+
+    def test_dockerfile_list_is_the_full_group(self):
+        import re
+        with open(os.path.join(os.path.dirname(__file__), "..", "docker", "Dockerfile")) as f:
+            (mods,) = re.findall(r'^ARG NS3_TEST_MODULES="([^"]*)"$', f.read(), re.M)
+        self.assertEqual(mods.split(";"), m.read_suites()[0]["full"])
+
+
 class UnitShards(unittest.TestCase):
     """#86: the sanitized unit stage runs as N shards that cover its group exactly."""
 
