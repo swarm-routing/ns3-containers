@@ -53,6 +53,14 @@ that list its modules exactly once; a `main-only` line (suites test/unit.sh
 leaves out on pull requests, #86) names at least one suite and is not a
 group.
 
+An entry's `representative` marks the images that stand for their kind on a
+pull request whose images are all unchanged from what `main` last tested and
+promoted, but whose test stages changed (tools/pr_tests.py, #86, #87): the
+changed stages run on these only. They are Ubuntu debug, sanitized and
+optimized, plus one image per other base: Debian debug, slim default (so the
+`default` profile is covered too) and Alpine debug. An on-demand release has
+only Ubuntu default and debug; debug stands for it.
+
 --tier latest keeps only the supported release's entries (its full set, the
 images the automatic pipelines own). It is what an OS security refresh
 rebuilds (publish-images.yml `refresh`, #29): with --versions it refuses any
@@ -92,6 +100,11 @@ BASES = {
 
 FULL = ["default", "debug", "sanitized", "optimized"]
 LIGHT = ["default", "debug"]
+# (os, profile) of the images that stand for their kind on a pull request
+# that changes only test stages (tools/pr_tests.py). Every base and every
+# profile of the supported release's plan has one (test_ns3_matrix.py).
+REPRESENTATIVES = {("ubuntu", "debug"), ("ubuntu", "sanitized"), ("ubuntu", "optimized"),
+                   ("debian", "debug"), ("slim", "default"), ("alpine", "debug")}
 
 TAG_RE = re.compile(r"^ns-3\.(\d+)(?:\.(\d+))?$")
 
@@ -162,6 +175,7 @@ def entries(chosen, newest_full, sha7="", splits=None):
                 "tags": " ".join(tags),
                 "latest_tags": " ".join(latest),
                 "pr_unit_set": "" if os_ == "ubuntu" else "light",
+                "representative": (os_, profile) in REPRESENTATIVES,
                 "test_parts": test_parts(profile, splits),
             })
     return out
