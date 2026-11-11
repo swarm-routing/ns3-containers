@@ -167,19 +167,29 @@ jobs:
         with:
           path: ${{ runner.temp }}/trivy-cache
           key: ${{ steps.trivy.outputs.key }}
+      # Saved only when both downloads landed: a failed checks download makes
+      # Trivy fall back to its embedded checks, and a cache of that would stop
+      # every test job of the day from retrying. Without a save the test jobs
+      # find no key and download themselves, as before.
       - name: Download Trivy's databases (first run of the day)
+        id: trivy-download
         if: steps.changes.outputs.images == 'true' && steps.trivy-restore.outputs.cache-hit != 'true'
+        continue-on-error: true
         run: |
-          mkdir -p "$RUNNER_TEMP/trivy-cache"
-          trivy() { docker run --rm -v "$RUNNER_TEMP/trivy-cache:/root/.cache" -v "$PWD:/repo:ro" "$TRIVY" "$@"; }
+          c="$RUNNER_TEMP/trivy-cache"
+          mkdir -p "$c"
+          trivy() { docker run --rm -v "$c:/root/.cache" -v "$PWD:/repo:ro" "$TRIVY" "$@"; }
           trivy image --download-db-only --no-progress
           # The checks bundle is fetched by the first misconfiguration scan.
           trivy config --quiet --exit-code 0 /repo/docker > /dev/null
           # Trivy ran as root: hand the files to the runner for the cache upload.
-          sudo chown -R "$(id -u):$(id -g)" "$RUNNER_TEMP/trivy-cache"
-          du -sh "$RUNNER_TEMP"/trivy-cache/trivy/* | tee -a "$GITHUB_STEP_SUMMARY"
+          sudo chown -R "$(id -u):$(id -g)" "$c"
+          for f in db/trivy.db db/metadata.json policy/metadata.json policy/content; do
+            [ -e "$c/trivy/$f" ] || { echo "::warning::Trivy did not download $f: no cache saved"; exit 1; }
+          done
+          du -sh "$c"/trivy/* | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Save Trivy's databases
-        if: steps.changes.outputs.images == 'true' && steps.trivy-restore.outputs.cache-hit != 'true'
+        if: steps.trivy-download.outcome == 'success'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/trivy-cache
