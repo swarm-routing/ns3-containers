@@ -41,18 +41,20 @@ def digest_of(root, name, parts):
     # The marker paths come from listing <dir>, never from joining argv into a
     # path: a name or part such as "../x" then matches no entry (Sonar S8707).
     try:
-        markers = {e.name: e.path for e in os.scandir(root) if e.is_dir()}
+        entries = list(os.scandir(root))
     except OSError:
-        markers = {}
+        entries = []
+    markers = {e.name: e.path for e in entries if e.is_dir()}
+    flat = next((e.path for e in entries if e.name == "digest" and e.is_file()), None)
     seen = {}
     for p in parts:
         marker = f"passed-{name}--{p['part']}"
         d = ""
         if marker in markers:
             d = _read(os.path.join(markers[marker], "digest"))
-        elif len(parts) == 1 and not markers:
+        elif len(parts) == 1 and not markers and flat:
             # One part, one matching artifact: download-artifact put it flat.
-            d = _read(os.path.join(root, "digest"))
+            d = _read(flat)
         if not d:
             raise ValueError(f"{name}: test part '{p['part']}' did not pass (no {root}/{marker}/digest)")
         seen[p["part"]] = d
