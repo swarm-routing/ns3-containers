@@ -149,6 +149,7 @@ jobs:
       matrix: ${{ steps.m.outputs.matrix }}
       tests: ${{ steps.m.outputs.tests }}
       count: ${{ steps.m.outputs.count }}
+      trivy_cache: ${{ steps.trivy.outputs.key }}
       canary: ${{ steps.m.outputs.canary }}
       canary_count: ${{ steps.m.outputs.canary_count }}
     steps:
@@ -183,6 +184,52 @@ jobs:
         run: |
           python3 -m unittest discover -s tools -v
           python3 tools/ns3_matrix.py --check-suites
+      # Trivy's vulnerability DB (133 MB to download, 1.7 GB unpacked) and
+      # checks bundle, fetched once per run here and once per UTC day for the
+      # Actions cache, instead of in every test job's security stage
+      # (#86, #87). The test jobs restore this exact key and run Trivy with
+      # TRIVY_SKIP_DB_UPDATE/TRIVY_SKIP_CHECK_UPDATE; a job that cannot
+      # restore it downloads them itself, as before.
+      - name: Trivy cache key (Trivy version, UTC day)
+        id: trivy
+        if: steps.changes.outputs.images == 'true'
+        run: |
+          ver=${TRIVY#*:}; ver=${ver%%@*}
+          echo "key=trivy-${ver}-$(date -u +%F)" >> "$GITHUB_OUTPUT"
+      - name: Restore Trivy's databases
+        id: trivy-restore
+        if: steps.changes.outputs.images == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/trivy-cache
+          key: ${{ steps.trivy.outputs.key }}
+      # Saved only when both downloads landed: a failed checks download makes
+      # Trivy fall back to its embedded checks, and a cache of that would stop
+      # every test job of the day from retrying. Without a save the test jobs
+      # find no key and download themselves, as before.
+      - name: Download Trivy's databases (first run of the day)
+        id: trivy-download
+        if: steps.changes.outputs.images == 'true' && steps.trivy-restore.outputs.cache-hit != 'true'
+        continue-on-error: true
+        run: |
+          c="$RUNNER_TEMP/trivy-cache"
+          mkdir -p "$c"
+          trivy() { docker run --rm -v "$c:/root/.cache" -v "$PWD:/repo:ro" "$TRIVY" "$@"; }
+          trivy image --download-db-only --no-progress
+          # The checks bundle is fetched by the first misconfiguration scan.
+          trivy config --quiet --exit-code 0 /repo/docker > /dev/null
+          # Trivy ran as root: hand the files to the runner for the cache upload.
+          sudo chown -R "$(id -u):$(id -g)" "$c"
+          for f in db/trivy.db db/metadata.json policy/metadata.json policy/content; do
+            [ -e "$c/trivy/$f" ] || { echo "::warning::Trivy did not download $f: no cache saved"; exit 1; }
+          done
+          du -sh "$c"/trivy/* | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Save Trivy's databases
+        if: steps.trivy-download.outcome == 'success'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/trivy-cache
+          key: ${{ steps.trivy.outputs.key }}
       - name: Validate the downstream consumer list
         run: test/downstream.sh --check
       - name: Generate the matrix from upstream tags
@@ -288,6 +335,13 @@ jobs:
             marker/digest
             marker/build-run
           retention-days: 1
+      - name: Restore Trivy's databases (resolve fetched them once)
+        id: trivy
+        if: env.WRITE_REGISTRY != 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/trivy-cache
+          key: ${{ needs.resolve.outputs.trivy_cache }}
       # The same choice the select job makes for same-repo PRs, read-only:
       # the loaded image against the public one main promoted.
       - name: Pick the tests (fork PR)
@@ -315,6 +369,8 @@ jobs:
           EXPECT_BUILD_RUN: ${{ github.run_id }}-${{ github.run_attempt }}
           UNIT_SET: ${{ github.event_name == 'pull_request' && matrix.pr_unit_set || '' }}
           UNIT_PR: ${{ github.event_name == 'pull_request' && '1' || '' }}
+          TRIVY_SKIP_DB_UPDATE: ${{ steps.trivy.outputs.cache-hit == 'true' && 'true' || '' }}
+          TRIVY_SKIP_CHECK_UPDATE: ${{ steps.trivy.outputs.cache-hit == 'true' && 'true' || '' }}
           STAGES: ${{ steps.pick.outputs.stages }}
         run: |
           args=()
@@ -430,6 +486,13 @@ jobs:
           # The attempt that BUILT the candidate: a re-run of a failed test
           # job tests the same candidate under a later run attempt.
           echo "build_run=$(cat marker/build-run)" >> "$GITHUB_OUTPUT"
+      - name: Restore Trivy's databases (resolve fetched them once)
+        id: trivy
+        if: contains(matrix.stages, 'security') || matrix.stages == ''
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/trivy-cache
+          key: ${{ needs.resolve.outputs.trivy_cache }}
       - name: Test stages
         env:
           REF: ${{ steps.pull.outputs.ref }}
@@ -444,6 +507,9 @@ jobs:
           UNIT_PR: ${{ github.event_name == 'pull_request' && '1' || '' }}
           STAGES: ${{ matrix.stages }}
           SHARD: ${{ matrix.unit_shard }}
+          # The cache holds the DB and checks resolve fetched for this run: use them as they are.
+          TRIVY_SKIP_DB_UPDATE: ${{ steps.trivy.outputs.cache-hit == 'true' && 'true' || '' }}
+          TRIVY_SKIP_CHECK_UPDATE: ${{ steps.trivy.outputs.cache-hit == 'true' && 'true' || '' }}
         run: |
           args=()
           [ -n "$STAGES" ] && args+=(--stages "$STAGES")
