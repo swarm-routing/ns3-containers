@@ -5,6 +5,6 @@ contact_links:
   - name: Issue and label conventions
     url: https://github.com/swarm-routing/.github/blob/main/CONTRIBUTING.md#issues
     about: Body shape (Context, Scope, Acceptance criteria, Depends on, References) and the type / area / model / priority labels.
-  - name: AntHocNet (reference implementation, until its cutover)
-    url: https://github.com/danieljoppi/AntHocNet/issues
-    about: Di Caro et al. AntHocNet-specific mechanics are still tracked in danieljoppi/AntHocNet.
+  - name: AntHocNet (reference implementation)
+    url: https://github.com/swarm-routing/AntHocNet/issues
+    about: Di Caro et al. AntHocNet-specific mechanics are tracked in swarm-routing/AntHocNet.
