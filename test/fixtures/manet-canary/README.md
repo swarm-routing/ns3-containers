@@ -14,4 +14,4 @@ Two scenarios are run per protocol:
   finish within its budget. On ns-3.49 stock AODV never finishes this run:
   `Ipv4L3Protocol::SendIcmpNoRoute` feeds back into AODV's deferred route
   output in zero simulated time (ns3-containers#35,
-  danieljoppi/AntHocNet#843).
+  swarm-routing/AntHocNet#843).
