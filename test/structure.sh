@@ -118,7 +118,7 @@ case "${BUILD_PROFILE:-}" in
     debug|sanitized)
         full=$(awk '{sub(/#.*/, "")} $1 == "full" {$1=""; print}' /src/test/ns3-suites.txt 2>/dev/null | xargs)
         if [ -z "$full" ]; then
-            skip "no full group in /src/test/ns3-suites.txt to compare with"
+            bad "no full group in /src/test/ns3-suites.txt: cannot check the pre-built test libraries"
         else
             missing=""
             for m in $full; do
