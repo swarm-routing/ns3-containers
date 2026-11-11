@@ -8,8 +8,10 @@
 publish-images.yml tests one image in one or more jobs (its `test_parts`
 from tools/ns3_matrix.py: everything in one job, or the stages but unit plus
 N unit shards, ns3-containers#86). Each job that passes uploads the digest it
-tested as the artifact passed-<name>--<part>; downloaded by pattern, each
-lands at <dir>/passed-<name>--<part>/digest. The image may be promoted only
+tested as the artifact passed-<name>--<part>, holding
+passed-<name>--<part>/digest; downloaded by pattern with merge-multiple, each
+lands at <dir>/passed-<name>--<part>/digest however many artifacts matched
+(a bare <dir>/digest names no image or part and never counts, #101). The image may be promoted only
 when every part left its marker and all of them name the same digest: then
 this prints that digest and exits 0. Otherwise it says what is missing on
 stderr and exits 1.
