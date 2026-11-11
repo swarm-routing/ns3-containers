@@ -33,10 +33,12 @@ test/integration.sh               ns-3 simulates: tutorial `first` + manet-canar
 test/unit.sh                      ns-3's own QUICK unit suites for the modules in test/ns3-suites.txt (full on debug/sanitized; UNIT_SET=light|full overrides, light on PRs for the OS variants); prints every suite's time
 test/ns3-suites.txt               which modules' suites the unit stage runs, per profile group; `split`/`shard` lines: which profiles test in parallel jobs (#86); `main-only`: suites pull requests leave out (#86)
 test/known-failures.txt           upstream bugs expected on one exact ns-3 version (strict XFAIL, shown in the summary)
+test/downstream.sh                the downstream canary: clone, stage, ns3-build-contrib --test and run each consumer in test/downstream.txt on one image (ubuntu debug only; --check validates the list); gates latest-*
+test/downstream.txt               the org's ns-3 modules the canary builds (name | repo@ref | ns-3 range | modules | suites | stage | run); a new protocol is one line
 test/fixtures/swarm-hello/        minimal contrib module (C++17..C++23) used by the smoke (GPL-2.0-only: an ns-3 module)
 test/fixtures/manet-canary/       short MANET program for the integration stage (GPL-2.0-only)
 test/fixtures/profile-probe/      one deliberate assert/log/memory bug per mode, for the profile stage (GPL-2.0-only)
-.github/workflows/publish-images.yml   resolve -> build once (candidate in ns3-dev-ci) -> test by digest -> promote = retag the same digest (main) -> sign -> attest -> CVE report to code scanning (non-blocking) -> latest-* -> discard this run's candidates (PRs too); weekly new release; `versions` = on demand; `refresh` = OS security refresh of the supported release (REFRESH=<run id>, --tier latest); runs on every PR (other paths: empty matrix), `images gate` is the check to require
+.github/workflows/publish-images.yml   resolve -> build once (candidate in ns3-dev-ci) -> test by digest -> promote = retag the same digest (main) -> sign -> attest -> CVE report to code scanning (non-blocking); downstream canary on the ubuntu debug candidate (advisory on PRs, opens/updates an issue on main) -> latest-* -> discard this run's candidates (PRs too); weekly new release; `versions` = on demand; `refresh` = OS security refresh of the supported release (REFRESH=<run id>, --tier latest); runs on every PR (other paths: empty matrix), `images gate` is the check to require
 .github/workflows/container-security.yml   every push/PR: hadolint (gate) and a Trivy config scan, both as SARIF to code scanning (the image CVE report is in publish-images' promote job)
 .github/workflows/pr-title.yml         the PR title is a lowercase Conventional Commit (reusable-pr-title.yml)
 .github/workflows/candidates-cleanup.yml   daily: ns3-dev-ci candidates left by failed runs (> 7 days), untagged ns3-dev-cache versions (> 1 day); never ns3-dev
@@ -52,6 +54,8 @@ docker build -f docker/Dockerfile --build-arg NS3_VERSION=3.48 \
     --build-arg BUILD_PROFILE=debug -t ns3-dev:3.48-debug .        # ~8-15 min on 4 cores
 EXPECT_VERSION=3.48 EXPECT_PROFILE=debug EXPECT_OS=ubuntu \
     test/run.sh ns3-dev:3.48-debug                                 # every test stage, as CI runs them
+test/downstream.sh --check                                         # the consumer list parses (no docker)
+test/downstream.sh ns3-dev:3.48-debug                              # every org module builds and passes on the image (latest-* gate)
 hadolint docker/Dockerfile                                       # reads .hadolint.yaml; exit 0 required
 shellcheck docker/scripts/build-contrib.sh test/*.sh
 actionlint .github/workflows/*.yml
@@ -75,16 +79,24 @@ Org-wide (1–9), then this repo's own.
    `.h`/`.hpp`/`.cc`/`.cpp`/`.py`/`.sh` starts with
    `// Copyright (c) 2026 Daniel Joppi (https://github.com/swarm-routing)` +
    `// SPDX-License-Identifier: <MIT OR GPL-2.0-only | GPL-2.0-only>` (`#`
-   comments where needed), matching its directory in `LICENSING.md`. CI
-   (`reusable-licence-check.yml`) checks it. A new directory gets its row in
-   `LICENSING.md` in the same PR.
+   comments where needed), matching its directory in `LICENSING.md`; an
+   outside contributor may add their own `Copyright (c) <year> <Name>` line
+   beneath the org line, never replace it, and signs off every commit (DCO,
+   CONTRIBUTING "Outside contributions"). CI (`reusable-licence-check.yml`)
+   checks the SPDX line, and the org line's place when a header names more
+   than one holder; a header with a single, other holder (a replaced org line,
+   or third-party code) passes it, so review catches that. A new directory
+   gets its row in `LICENSING.md` in the same PR.
 2. **The licence boundary only goes one way.** GPL code may use the dual
    parts; dual code never pulls GPL-only code in: a `core/` file includes only
    the C++ standard library, other `core/` files and the dual-licensed `core/`
-   of a dependency pinned by commit and declared in the repo's `licence.yml`
-   `core-deps`, with `core-roots` naming the repo's own `core/` (without it
-   the check skips core includes; a protocol's `core/` on swarm-core's; CI
-   checks it, `check-headers.py --core-dep`), and a dual script imports no GPL-only code. Code coming from AntHocNet keeps its
+   of a dependency pinned by commit and declared as the `core-deps` input of
+   every workflow that runs the licence check (one calling
+   `reusable-licence-check.yml`, or one calling `reusable-ns3-ci.yml`, which
+   forwards it; workflow file names differ per repo), each with the same pin,
+   with `core-roots` naming the repo's own `core/`
+   (without it the check skips core includes; a protocol's `core/` on
+   swarm-core's; CI checks it, `check-headers.py --core-dep`), and a dual script imports no GPL-only code. Code coming from AntHocNet keeps its
    licence: its `core/`/`tools/` (dual) may land in dual or GPL paths here; its
    `ns3/` modules and `web/` (GPL-2.0-only) only in GPL paths. Third-party code
    (AntHocNet's vendored `aomdv`/`gpsr`, IITP RAS) lands only in GPL paths with
@@ -182,9 +194,12 @@ Org-wide (1–9), then this repo's own.
   and open PRs; a release is the bump PR from `bot/release`, tagged after it
   merges (CONTRIBUTING "Cutting a release").
 - When a PR falls behind `main`, update it
-  (`gh api -X PUT repos/<owner>/<repo>/pulls/<n>/update-branch`) and merge PRs
-  one at a time, each after its CI on the updated branch. Never force-push a
-  branch someone else pushed. A behind `bot/release` PR is the exception:
+  (`gh api -X PUT "repos/<owner>/<repo>/pulls/<n>/update-branch"`, with
+  `<owner>/<repo>` the PR's base repository and `<n>` its number) and merge PRs one at a time, each after its CI on the updated branch. A
+  repository with a merge queue (`merge_queue = true` in its `[settings]`)
+  is not updated by hand: enable auto-merge and the queue tests each PR on
+  the latest `main` and merges it (CONTRIBUTING "Merge when CI is green").
+  Never force-push a branch someone else pushed. A behind `bot/release` PR is the exception:
   dispatch the release `bump` again, so the version and changelog are rebuilt
   on the new `main`.
 - **Settings are code.** Repository settings, rulesets, required checks and the

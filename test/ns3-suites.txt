@@ -38,7 +38,9 @@ main-only ns3-tcp-cubic
 # cores beside it. No unit shard can finish below that suite: an internet
 # shard would still take about 36 min, for about 23 more runner-minutes. So
 # the unit stage stays one job and only the other stages move out. With
-# ns3-tcp-cubic deferred to main on pull requests the unit stage is still
-# about 20 min (test libraries plus wifi-mac-ofdma, the next slowest suite),
-# so the two stages together would exceed 25 min in one job: the split stays.
+# ns3-tcp-cubic deferred to main on pull requests (#97's run 42914844852) the
+# unit job still took 2870 s (test libraries 657 s, test.py 2181 s, whose
+# floor is now wifi-mac-ofdma at 1442 s) and the other stages 763 s, on a
+# runner about 1.7x slower than #89's: in one job the two would far exceed
+# 25 min on any runner, so the split stays.
 split sanitized 1

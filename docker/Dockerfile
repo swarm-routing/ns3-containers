@@ -112,6 +112,32 @@ RUN case "${BUILD_PROFILE}" in \
  && ./ns3 build \
  && ./ns3 show profile
 
+# The unit stage's test libraries (test/unit.sh), pre-built on the profiles
+# that run the `full` group of test/ns3-suites.txt, so no test job compiles
+# them again (ns3-containers#86, #87: ~190 s per debug job, ~640 s on
+# sanitized). Its own layer: the build layer above is untouched. It
+# reconfigures with the recorded line (invariant 10: only the
+# examples/tests filter differs), builds `test-runner` and the test
+# libraries it links (no examples), then restores the `core` filter, so the
+# tree is configured exactly as before; Ninja keeps the built outputs, and a
+# later configure that names these modules (test/unit.sh) finds them up to
+# date. NS3_TEST_MODULES must equal the `full` group (tools/test_ns3_matrix.py).
+ARG NS3_TEST_MODULES="core;network;internet;mobility;wifi;propagation;aodv;olsr;dsdv;mesh"
+# NS3_PROFILE_FLAGS is unquoted on purpose, as in ns3-build-contrib.
+# hadolint ignore=SC1091,SC2086
+RUN case "${BUILD_PROFILE}" in \
+        debug|sanitized) \
+            . ./.swarm-configure.env \
+         && ./ns3 configure -G Ninja ${NS3_PROFILE_FLAGS} --enable-examples --enable-tests \
+                --disable-werror --filter-module-examples-and-tests="${NS3_TEST_MODULES}" \
+                --enable-modules="${NS3_MODULES}" \
+         && ./ns3 build test-runner \
+         && ./ns3 configure -G Ninja ${NS3_PROFILE_FLAGS} --enable-examples --enable-tests \
+                --disable-werror --filter-module-examples-and-tests=core \
+                --enable-modules="${NS3_MODULES}" ;; \
+        *) echo "no pre-built test libraries on the ${BUILD_PROFILE} profile" ;; \
+    esac
+
 # After the ns-3 build, so editing the script or the hook never invalidates
 # the (long) build layer above.
 COPY --chmod=755 docker/scripts/build-contrib.sh /usr/local/bin/ns3-build-contrib
