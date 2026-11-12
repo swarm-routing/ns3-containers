@@ -8,7 +8,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        PDFs and manuscript drafts live in the private `swarm-routing/papers` repo; never attach a paywalled PDF to a public issue.
+        PDFs and manuscript drafts live in a private library the maintainer keeps; never attach a paywalled PDF to a public issue.
         A comparator arm's numbers only count after its three gates: a fidelity sheet from its paper, the per-PR delivery smoke, and an anchor reproducing the paper's own trend.
   - type: input
     id: citation
