@@ -32,5 +32,5 @@ test/fixtures/profile-probe/      one deliberate assert/log/memory bug per mode,
 .github/workflows/pr-title.yml         the PR title is a lowercase Conventional Commit (reusable-pr-title.yml)
 .github/workflows/candidates-cleanup.yml   daily: ns3-dev-ci candidates left by failed runs (> 7 days), untagged ns3-dev-cache versions (> 1 day); never ns3-dev
 .github/workflows/licence.yml     licence headers (tooling MIT OR GPL-2.0-only, rest GPL-2.0-only)
-.github/ISSUE_TEMPLATE/           the org's forms (copied: a repo folder replaces the org defaults) + image-request.yml
+.github/ISSUE_TEMPLATE/           the org's forms (org-sync items, `forms = true`: a repo folder replaces the org defaults) + image-request.yml
 ```
