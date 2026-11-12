@@ -380,7 +380,7 @@ because the issue threads were thorough. Caveman the chat, not the record.
 |--------------|-------|
 | Add an ns-3 version | nothing: the weekly run picks up a new upstream release (`tools/ns3_matrix.py`); an older one is built on demand with `workflow_dispatch` `versions` |
 | Change what a release gets, a base image digest, or add a profile | `tools/ns3_matrix.py` (+ its test) and the `Dockerfile` profile `case` |
-| Handle an image request (another distro, compiler, version) | the *Image request* form's issue; supported set and its reasons in README "Need another distribution…" and #19. When the org's forms in `swarm-routing/.github` change, re-copy them into `.github/ISSUE_TEMPLATE/` |
+| Handle an image request (another distro, compiler, version) | the *Image request* form's issue; supported set and its reasons in README "Need another distribution…" and #19. The org's forms in `.github/ISSUE_TEMPLATE/` are org-sync items (`forms = true`; swarm-routing/.github#318) |
 | Add a stock ns-3 module to the images | `NS3_MODULES` in `docker/Dockerfile` (every downstream repo inherits it) |
 | Change how contrib modules build | `docker/scripts/build-contrib.sh` (+ `test/smoke.sh`) |
 | The reference image this was derived from | AntHocNet `docker/Dockerfile.ns3`, `.github/workflows/images.yml` |

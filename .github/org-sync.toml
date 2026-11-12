@@ -1,5 +1,6 @@
 # org-sync configuration (swarm-routing/.github tools/org-sync).
 kind = "container"
+forms = true
 title = "ns3-containers"
 dual = ["docker/", "test/smoke.sh", "test/run.sh", "test/structure.sh", "test/integration.sh", "test/profile.sh", "test/unit.sh", "tools/", ".github/workflows/"]
 ci_workflow = "publish-images.yml"
