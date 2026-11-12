@@ -48,7 +48,7 @@ ruleset = "tooling"
 # The image pipeline is required through its always-running `images gate` job (#80), not its
 # build/test jobs: those run only on docker/**, test/**, tools/** changes, and a required
 # check that does not run blocks the PR.
-required_checks = ["check / org-sync", "headers / licence", "images gate", "title / title"]
+required_checks = ["check / org-sync", "headers / licence", "images gate", "title / title", "review / coderabbit"]
 # Merge through a merge queue (swarm-routing/.github#130); every workflow behind a required
 # check also runs on merge_group. `images gate` waits for image builds and tests: the slowest
 # green PR runs took 143-145 min (2026-11), and a merge group runs the full unit groups, so the
