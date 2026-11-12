@@ -8,15 +8,15 @@ body:
   - type: dropdown
     id: model
     attributes:
-      label: Recommended model
+      label: Suggested model
       description: >
-        Which Claude model class should implement this (see the labelling
-        convention in CONTRIBUTING.md). Apply the matching `model:*` label too. Use
+        A suggestion, not a requirement: the Claude model (one a Claude Pro plan
+        includes) suited to this work (see the labelling convention in CONTRIBUTING.md). Apply the matching `model:*` label too. Use
         `verification` instead of `chore` for benchmark re-run tasks.
       options:
-        - "model:haiku-4.5 — mechanical / chore"
-        - "model:sonnet-5 — well-specified plumbing, tooling, docs"
-        - "model:opus-4.8 — protocol semantics, root-cause work, CI-validated adapter changes"
+        - "model:haiku-5.5 — mechanical / chore"
+        - "model:sonnet-5.5 — well-specified plumbing, tooling, docs"
+        - "model:opus-5.5 — protocol semantics, root-cause work, adapter changes, architecture"
     validations:
       required: false
   - type: textarea
