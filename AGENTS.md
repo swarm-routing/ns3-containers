@@ -18,34 +18,24 @@ Debian 13 slim, Alpine (experimental). `ns3-build-contrib` links mounted
 modules into the tree and builds them.
 
 ```
-docker/Dockerfile                 BASE_IMAGE x NS3_VERSION x BUILD_PROFILE image
-tools/pass_markers.py             promote's check: every test job of an image passed, all on one digest (+ test_pass_markers.py)
-tools/ns3_matrix.py               supported release vs on-demand releases (`--tier latest`: the supported release only), base digests and tags, the PR representatives (+ test_ns3_matrix.py)
-tools/pr_tests.py                 the PR test selection: which images and stages a pull request tests (`select` job; + test_pr_tests.py)
-docker/gcovr-requirements.in      gcovr's pin for the debug/sanitized images; docker/gcovr-requirements.txt: its hashed lock (uv pip compile, command in the .in)
-docker/scripts/build-contrib.sh   -> /usr/local/bin/ns3-build-contrib (--strict-warnings / --coverage [--quality-modules] through swarm-quality.cmake, the contrib targets only; ns-3.43+ and 3.36-3.42 target names)
-test/run.sh                       every test stage against one image ref (the candidate digest in CI); `security` runs Trivy (pinned by digest) on the host; `--stages`/`--unit-shard i/N` run a part (split test jobs, #86)
-.trivyignore                      accepted Dockerfile findings, each with its reason (the vuln and secret scans take none)
-.hadolint.yaml                    hadolint settings: failure at warning, apt/apk version pinning (DL3008/DL3018) ignored, trusted registries
-test/structure.sh                 image contract: tree, tools, env, configure record, CMake cache vs profile, C++ standard, gcovr on debug/sanitized, unzip/curl/gpg on debug
-test/profile.sh                   the profile keeps its promise: asserts/logs on or off, sanitizers catch planted bugs, no AVX
-test/smoke.sh                     image smoke (incremental build + test.py + guards; --strict-warnings catches a planted -Wshadow in a source and in an own header reached through ns3/, --quality-modules leaves a dependency unjudged, --coverage instruments the module only, the image's gcovr reports it)
-test/integration.sh               ns-3 simulates: tutorial `first` + manet-canary AODV/OLSR/DSDV dense/sparse under a wall-clock budget
-test/unit.sh                      ns-3's own QUICK unit suites for the modules in test/ns3-suites.txt (full on debug/sanitized; UNIT_SET=light|full overrides, light on PRs for the OS variants); prints every suite's time
-test/ns3-suites.txt               which modules' suites the unit stage runs, per profile group; `split`/`shard` lines: which profiles test in parallel jobs (#86); `main-only`: suites pull requests leave out (#86)
-test/known-failures.txt           upstream bugs expected on one exact ns-3 version (strict XFAIL, shown in the summary)
-test/downstream.sh                the downstream canary: clone, stage, ns3-build-contrib --test and run each consumer in test/downstream.txt on one image (ubuntu debug only; --check validates the list); gates latest-*
-test/downstream.txt               the org's ns-3 modules the canary builds (name | repo@ref | ns-3 range | modules | suites | stage | run); a new protocol is one line
-test/fixtures/swarm-hello/        minimal contrib module (C++17..C++23) used by the smoke (GPL-2.0-only: an ns-3 module)
-test/fixtures/manet-canary/       short MANET program for the integration stage (GPL-2.0-only)
-test/fixtures/profile-probe/      one deliberate assert/log/memory bug per mode, for the profile stage (GPL-2.0-only)
-.github/workflows/publish-images.yml   resolve -> build once (candidate in ns3-dev-ci) -> select the tests (PRs: only what the PR affects) -> test by digest -> promote = retag the same digest (main) -> sign -> attest -> CVE report to code scanning (non-blocking); downstream canary on the ubuntu debug candidate (advisory on PRs, opens/updates an issue on main) -> latest-* -> discard this run's candidates (PRs too); weekly new release; `versions` = on demand; `refresh` = OS security refresh of the supported release (REFRESH=<run id>, --tier latest); runs on every PR (other paths: empty matrix), `images gate` is the check to require
-.github/workflows/container-security.yml   every push/PR: hadolint (gate) and a Trivy config scan, both as SARIF to code scanning (the image CVE report is in publish-images' promote job)
-.github/workflows/pr-title.yml         the PR title is a lowercase Conventional Commit (reusable-pr-title.yml)
-.github/workflows/candidates-cleanup.yml   daily: ns3-dev-ci candidates left by failed runs (> 7 days), untagged ns3-dev-cache versions (> 1 day); never ns3-dev
-.github/workflows/licence.yml     licence headers (tooling MIT OR GPL-2.0-only, rest GPL-2.0-only)
-.github/ISSUE_TEMPLATE/           the org's forms (copied: a repo folder replaces the org defaults) + image-request.yml
+docker/Dockerfile                 the image: BASE_IMAGE x NS3_VERSION x BUILD_PROFILE
+docker/scripts/build-contrib.sh   ns3-build-contrib (strict warnings, coverage, quality modules)
+docker/gcovr-requirements.{in,txt}   gcovr's pin and hashed lock (debug/sanitized images)
+tools/ns3_matrix.py               supported vs on-demand releases, base digests, tags, PR representatives
+tools/pr_tests.py                 which images and stages a PR tests (the `select` job)
+tools/pass_markers.py             promote's check: every test job passed, on one digest
+test/run.sh                       every test stage against one image ref (`--stages`, `--unit-shard`)
+test/{structure,profile,smoke,integration,unit}.sh   the stages: image contract, profile promise, smoke, simulation, ns-3 unit suites
+test/ns3-suites.txt, test/known-failures.txt   unit suites per profile (split, main-only), expected upstream failures
+test/downstream.{sh,txt}          the downstream canary and the org modules it builds (gates latest-*)
+test/fixtures/                    swarm-hello (smoke), manet-canary (integration), profile-probe (profile); GPL-2.0-only
+.trivyignore, .hadolint.yaml      accepted Dockerfile findings; hadolint settings
+.github/workflows/                publish-images.yml (build, test by digest, promote, sign; `images gate`), container-security.yml,
+                                  pr-title.yml, candidates-cleanup.yml, licence.yml; .github/ISSUE_TEMPLATE/ (+ image-request.yml)
 ```
+
+Before you change one of these files, or need what a flag, stage or job does
+in detail, read its line in [`docs/layout.md`](docs/layout.md).
 
 ## Build & verify
 
