@@ -8,8 +8,10 @@ body:
   - type: markdown
     attributes:
       value: |
-        A new session starts from the newest open `handoff` issue. Write it so a reader with no chat history can continue.
-        Close it from the session that finishes the work, with a pointer to the result.
+        A session that continues this work starts from the newest open `handoff` issue for it; a new task starts from its request.
+        A session that continued this handoff and ends with work in flight updates this issue instead of opening another.
+        Write it so a reader with no chat history can continue.
+        Close it from the session that finishes the work, with a pointer to the result, and close any older handoff it superseded.
   - type: textarea
     id: goal
     attributes:
