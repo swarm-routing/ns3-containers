@@ -116,5 +116,61 @@ class PassMarkers(unittest.TestCase):
         self.assertEqual(pm.main([self.root, "3.49-default", '[{"part": "all"}]']), 1)
 
 
+WORKFLOW = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".github", "workflows", "publish-images.yml")
+
+
+def marker_downloads(text):
+    """(line number, step text) of each download-artifact step whose pattern is a pass marker's."""
+    lines = text.splitlines()
+    starts = [i for i, line in enumerate(lines) if line.startswith("      - ")]
+    out = []
+    for a, b in zip(starts, starts[1:] + [len(lines)]):
+        step = "\n".join(lines[a:b])
+        if "uses: actions/download-artifact@" in step and "pattern: passed-" in step:
+            out.append((a + 1, step))
+    return out
+
+
+class WorkflowReaders(unittest.TestCase):
+    """Every job that reads pass markers downloads them the way digest_of expects (#101, #147)."""
+
+    def test_the_nested_layout_is_refused(self):
+        # Several matching artifacts without merge-multiple: each is unpacked
+        # into <dir>/<artifact name>/, one level too deep.
+        with tempfile.TemporaryDirectory() as root:
+            for part in ("base", "unit"):
+                d = os.path.join(root, f"passed-3.49-debug--{part}", f"passed-3.49-debug--{part}")
+                os.makedirs(d)
+                with open(os.path.join(d, "digest"), "w") as f:
+                    f.write("sha256:aa\n")
+            with self.assertRaisesRegex(ValueError, "did not pass"):
+                pm.digest_of(root, "3.49-debug", [{"part": "base"}, {"part": "unit"}])
+
+    def test_every_marker_download_merges(self):
+        with open(WORKFLOW) as f:
+            steps = marker_downloads(f.read())
+        # promote, canary and latest read the markers.
+        self.assertEqual(len(steps), 3, [line for line, _ in steps])
+        for line, step in steps:
+            self.assertRegex(step, r"(?m)^\s+merge-multiple: true$",
+                             f"publish-images.yml line {line}: a passed-* download without merge-multiple: true")
+
+    def test_the_parser_sees_a_missing_merge(self):
+        text = "\n".join([
+            "    steps:",
+            "      - uses: actions/download-artifact@abc # v8",
+            "        with:",
+            "          pattern: passed-${{ matrix.name }}--*",
+            "          path: pass",
+            "      - uses: actions/download-artifact@abc # v8",
+            "        with:",
+            "          pattern: digest-*",
+            "      - name: next",
+            "        run: 'true'"])
+        steps = marker_downloads(text)
+        self.assertEqual([line for line, _ in steps], [2])
+        self.assertNotIn("merge-multiple", steps[0][1])
+
+
 if __name__ == "__main__":
     unittest.main()

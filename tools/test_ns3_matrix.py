@@ -9,6 +9,7 @@ import sys
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(__file__))
 import ns3_matrix as m  # noqa: E402
@@ -260,6 +261,65 @@ class UnitShards(unittest.TestCase):
         self.assertTrue(all("test_parts" not in t for t in tm))
         for e in mx:
             self.assertEqual(sum(t["name"] == e["name"] for t in tm), len(e["test_parts"]))
+
+
+class MissingOnly(unittest.TestCase):
+    """--missing-only with a fake registry: no network (#149)."""
+
+    REQUIRED = {"3.49-default", "3.49-debug", "3.49-sanitized", "3.49-optimized",
+                "3.49-debian-default", "3.49-debian-debug", "3.49-slim-default", "3.49-slim-debug"}
+
+    def missing_only(self, have, *args):
+        asked = []
+
+        def fake(image, tag):
+            asked.append(tag)
+            return tag in have
+
+        with mock.patch.object(m, "published", fake):
+            mx = run(LS_REMOTE, "--missing-only", *args)
+        return mx, asked
+
+    def test_own_tag_is_one_of_the_entry_tags(self):
+        mx = run(LS_REMOTE + ["x\trefs/tags/ns-3.49.1"], "--sha", "290685fdeadbeef")
+        self.assertEqual({e["version"] for e in mx}, {"3.49.1"})
+        for e in mx:
+            self.assertIn(m.own_tag(e), e["tags"].split())
+        self.assertEqual({m.own_tag(e) for e in run(LS_REMOTE) if not e["experimental"]}, self.REQUIRED)
+
+    def test_nothing_published(self):
+        mx, _ = self.missing_only(set())
+        self.assertEqual(len(mx), 9)
+
+    def test_plain_tag_published_but_a_required_image_absent(self):
+        # Run 50 (#64): :3.49 was promoted, the Debian and slim legs failed.
+        have = (self.REQUIRED | {"3.49"}) - {"3.49-debian-debug"}
+        mx, _ = self.missing_only(have)
+        self.assertEqual(len(mx), 9)  # the whole release is rebuilt, not one image
+        self.assertEqual({e["version"] for e in mx}, {"3.49"})
+
+    def test_every_required_image_published(self):
+        mx, asked = self.missing_only(self.REQUIRED | {"3.49", "3.49-alpine-debug"})
+        self.assertEqual(mx, [])
+        self.assertNotIn("3.49-alpine-debug", asked)
+
+    def test_absent_alpine_alone_is_not_missing(self):
+        # Alpine is experimental: it may never be published.
+        mx, _ = self.missing_only(self.REQUIRED | {"3.49"})
+        self.assertEqual(mx, [])
+
+    def test_summary_names_the_missing_images(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "summary.md")
+            self.missing_only(self.REQUIRED - {"3.49-debian-debug", "3.49-slim-default"}, "--summary", path)
+            with open(path) as f:
+                text = f.read()
+            self.assertIn("`3.49-debian-debug`", text)
+            self.assertIn("`3.49-slim-default`", text)
+            self.assertNotIn("alpine", text)
+            self.missing_only(self.REQUIRED, "--summary", path)
+            with open(path) as f:
+                self.assertIn("nothing to build", f.read()[len(text):])
 
 
 if __name__ == "__main__":

@@ -5,6 +5,7 @@
 
     tools/ns3_matrix.py [--tags-file F] [--versions 3.36,3.46.1] [--sha SHA]
                         [--tier latest] [--missing-only] [--image REF]
+                        [--summary FILE]
 
 Prints a GitHub Actions matrix, {"include": [...]}, on stdout. Versions are
 never typed by hand: they are read from `git ls-remote` of ns-3-dev (or
@@ -67,8 +68,19 @@ rebuilds (publish-images.yml `refresh`, #29): with --versions it refuses any
 release but the supported one, so a refresh never rebuilds history as a side
 effect (an older release is rebuilt only by an on-demand --versions build).
 
---missing-only keeps only versions whose plain :<full-version> tag is not yet
-published (anonymous GHCR check): the scheduled run builds a new release once.
+--missing-only keeps only the releases that are not yet published in full
+(anonymous GHCR check): the scheduled run builds a new release once, and
+builds it again while a required image of it is missing (#149). A release is
+published when every required (non-experimental) image of its plan has its
+own versioned tag under the release's full number (:3.50-debug,
+:3.50-debian, ...: `own_tag`), not only the plain :<full-version> tag, which
+is the Ubuntu default image's alone. A release with one such tag missing
+keeps all its entries: the run rebuilds the release, as any automatic run
+does. Alpine is experimental and never makes a release missing. The latest-*
+tags are not checked: when every image was promoted and they did not move, a
+consumer failed the downstream canary, and the issue the `canary` job opened
+for it is the signal; rebuilding the images would not fix the consumer.
+--summary FILE appends what was found, per release, to FILE (the step summary).
 """
 
 from __future__ import annotations
@@ -123,6 +135,12 @@ def parse_tags(lines):
         if minor not in best or patch > best[minor][0]:
             best[minor] = (patch, name[len("ns-"):])
     return {minor: full for minor, (_, full) in best.items()}
+
+
+def ls_remote():
+    """Upstream's ns-3.* tags, as `git ls-remote` prints them."""
+    return subprocess.run(["git", "ls-remote", "--tags", UPSTREAM, "ns-3.*"],
+                          check=True, capture_output=True, text=True).stdout.splitlines()
 
 
 def releases(versions):
@@ -257,6 +275,22 @@ def test_matrix(images):
     return out
 
 
+def own_tag(e):
+    """The versioned tag only this entry's image gets, under the release's full number."""
+    stem = e["version"] if e["os"] == "ubuntu" else f"{e['version']}-{e['os']}"
+    return f"{stem}-{e['profile']}"
+
+
+def missing_only(matrix, is_published):
+    """(the entries of the releases not published in full, {version: its missing required tags})."""
+    missing = {}
+    for e in matrix:
+        tags = missing.setdefault(e["version"], [])
+        if not e["experimental"] and not is_published(own_tag(e)):
+            tags.append(own_tag(e))
+    return [e for e in matrix if missing[e["version"]]], missing
+
+
 def published(image, tag):
     """True when image:tag exists, checked anonymously (the package is public)."""
     repo = image.split("/", 1)[1]
@@ -288,8 +322,10 @@ def main(argv=None):
     ap.add_argument("--tier", choices=["latest"],
                     help="latest: only the supported release's entries (an OS security refresh); "
                          "with --versions, refuse any other release")
-    ap.add_argument("--missing-only", action="store_true", help="drop versions already published")
+    ap.add_argument("--missing-only", action="store_true",
+                    help="drop the releases whose required images are all published")
     ap.add_argument("--image", default=IMAGE)
+    ap.add_argument("--summary", help="with --missing-only: append what was found to this file")
     ap.add_argument("--check-suites", action="store_true",
                     help="only validate test/ns3-suites.txt (the unit shards cover each split group exactly)")
     args = ap.parse_args(argv)
@@ -307,8 +343,7 @@ def main(argv=None):
         with open(args.tags_file) as f:
             lines = f.readlines()
     else:
-        lines = subprocess.run(["git", "ls-remote", "--tags", UPSTREAM, "ns-3.*"],
-                               check=True, capture_output=True, text=True).stdout.splitlines()
+        lines = ls_remote()
     rel = releases(parse_tags(lines))
     if not rel:
         sys.exit("ns3_matrix: no ns-3 releases found upstream")
@@ -329,8 +364,14 @@ def main(argv=None):
         chosen = [(m, f) for m, f in chosen if f == newest_full]
     matrix = entries(chosen, newest_full, args.sha[:7])
     if args.missing_only:
-        have = {v for v in {e["version"] for e in matrix} if published(args.image, v)}
-        matrix = [e for e in matrix if e["version"] not in have]
+        matrix, missing = missing_only(matrix, lambda tag: published(args.image, tag))
+        lines = [f"{v}: rebuilt, required images not published: " + ", ".join(f"`{t}`" for t in tags) if tags
+                 else f"{v}: every required image is published, nothing to build"
+                 for v, tags in missing.items()]
+        print("\n".join(f"ns3_matrix: {line}" for line in lines), file=sys.stderr)
+        if args.summary:
+            with open(args.summary, "a") as f:
+                f.write("".join(f"{line}\n" for line in lines))
     json.dump({"include": matrix}, sys.stdout, separators=(",", ":"))
     print()
     print(f"ns3_matrix: {len(matrix)} images: "
