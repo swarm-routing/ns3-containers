@@ -3,6 +3,8 @@
 # (org-bot's zenodo task opens that PR; never typed).
 citation = true
 kind = "container"
+# the Zenodo concept record, read from Zenodo by swarm-routing/.github tools/zenodo/zenodo.py record (#232)
+zenodo_concept = "24202109"
 forms = true
 title = "ns3-containers"
 dual = ["docker/", "test/smoke.sh", "test/run.sh", "test/structure.sh", "test/integration.sh", "test/profile.sh", "test/unit.sh", "test/downstream.sh", "tools/", ".github/workflows/"]
