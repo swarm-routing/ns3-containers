@@ -61,10 +61,11 @@ The published images are the way to use it (README.md "Which image"):
 
 Build one image from this tree and run every test stage on it:
 
-  docker build -f docker/Dockerfile --build-arg NS3_VERSION=<ver> \\
-      --build-arg BUILD_PROFILE=debug -t ns3-dev:<ver>-debug .
-  EXPECT_VERSION=<ver> EXPECT_PROFILE=debug EXPECT_OS=ubuntu \\
-      test/run.sh ns3-dev:<ver>-debug
+  ver=3.48   # an ns-3 release (tools/ns3_matrix.py lists the supported one)
+  docker build -f docker/Dockerfile --build-arg NS3_VERSION="\$ver" \\
+      --build-arg BUILD_PROFILE=debug -t "ns3-dev:\$ver-debug" .
+  EXPECT_VERSION="\$ver" EXPECT_PROFILE=debug EXPECT_OS=ubuntu \\
+      test/run.sh "ns3-dev:\$ver-debug"
 
 The release versions the pipeline and its contract (tags, profiles, bases,
 ns3-build-contrib); the image tags stay the ns-3 release.
