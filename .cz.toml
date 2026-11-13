@@ -10,7 +10,7 @@
 # is a major: major_version_zero = false) and rewrites the files below.
 [tool.commitizen]
 name = "cz_conventional_commits"
-version = "0.0.0"
+version = "1.0.0"
 version_scheme = "semver"
 tag_format = "v$version"
 major_version_zero = false
