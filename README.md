@@ -348,7 +348,7 @@ Corrections that came out of the tests:
 <!-- org-sync:begin citing -->
 ## Releases & citing
 
-Versions follow [SemVer](https://semver.org). Each release is listed under [Releases](https://github.com/swarm-routing/ns3-containers/releases), built by the org's release workflow and archived on [Zenodo](https://zenodo.org) with its own DOI.
+Versions follow [SemVer](https://semver.org) ([CHANGELOG.md](CHANGELOG.md)). Each release is listed under [Releases](https://github.com/swarm-routing/ns3-containers/releases), built by the org's release workflow and archived on [Zenodo](https://zenodo.org) with its own DOI.
 
 To cite this repository, use the “Cite this repository” button (from [CITATION.cff](CITATION.cff)). It has no DOI yet: the concept DOI appears here and in the badge above once Zenodo archives its first release.
 
