@@ -138,7 +138,6 @@ env:
   # Same pin as test/run.sh's security stage.
   TRIVY: ghcr.io/aquasecurity/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
   CACHE: ghcr.io/${{ github.repository_owner }}/ns3-dev-cache
-  PUSH: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
   # Same-repo PRs and main may write the registry (cache, candidates); fork PRs cannot.
   WRITE_REGISTRY: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
 
@@ -399,6 +398,7 @@ jobs:
     steps:
       - name: Harden the runner (audit egress)
         uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        timeout-minutes: 2  # its download and start take seconds (swarm-routing/.github#164)
         with:
           egress-policy: audit
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -584,6 +584,12 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # Every tool the job downloads is in place before a tag is created: a
+      # failed or stalled download then publishes nothing, instead of leaving
+      # tags without a signature (#148).
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        timeout-minutes: 2  # 0-1 s in the 36 promote jobs of four green main runs (2026-11-11)
       # The image's inventory (#38), generated from the tested candidate digest
       # before any tag is created, so a failure here publishes nothing. ns-3
       # is built from source (no package record for Trivy to find), so it is
@@ -652,8 +658,6 @@ jobs:
             [ "$got" = "$DIGEST" ] || { echo "::error::${IMAGE}:${t} is $got, tested $DIGEST"; exit 1; }
           done
           { echo "promoted \`${IMAGE}@${DIGEST}\`:"; for t in $TAGS; do echo "- \`$t\`"; done; } >> "$GITHUB_STEP_SUMMARY"
-      - name: Install cosign
-        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
       - name: Sign (keyless, by digest)
         env:
           DIGEST: ${{ steps.gate.outputs.digest }}
