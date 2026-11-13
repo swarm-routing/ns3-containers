@@ -3,6 +3,7 @@
 <!-- org-sync:begin badges -->
 [![CI](https://github.com/swarm-routing/ns3-containers/actions/workflows/publish-images.yml/badge.svg)](https://github.com/swarm-routing/ns3-containers/actions/workflows/publish-images.yml)
 [![Release](https://img.shields.io/github/v/release/swarm-routing/ns3-containers?sort=semver&cacheSeconds=1800)](https://github.com/swarm-routing/ns3-containers/releases)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24202109.svg)](https://doi.org/10.5281/zenodo.24202109)
 [![Cite](https://img.shields.io/badge/cite-CITATION.cff-blue)](CITATION.cff)
 [![Licence: MIT OR GPL-2.0-only tooling](https://img.shields.io/badge/licence-MIT%20OR%20GPL--2.0--only%20tooling-blue)](LICENSING.md)
 [![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-yellow)](https://www.conventionalcommits.org)
@@ -350,13 +351,19 @@ Corrections that came out of the tests:
 
 Versions follow [SemVer](https://semver.org) ([CHANGELOG.md](CHANGELOG.md)). Each release is listed under [Releases](https://github.com/swarm-routing/ns3-containers/releases), built by the org's release workflow and archived on [Zenodo](https://zenodo.org) with its own DOI.
 
-To cite this repository, use the “Cite this repository” button (from [CITATION.cff](CITATION.cff)). It has no DOI yet: the concept DOI appears here and in the badge above once Zenodo archives its first release.
+To cite this repository, use the “Cite this repository” button (from [CITATION.cff](CITATION.cff)):
+
+| DOI | resolves to |
+|---|---|
+| [`10.5281/zenodo.24202109`](https://doi.org/10.5281/zenodo.24202109) | **concept DOI**: always the latest release. This is the badge above, and the right citation when you mean this project. |
+
+Each release also has its own **version DOI**, listed on [its Zenodo record](https://doi.org/10.5281/zenodo.24202109): cite that one when you reproduce a number measured at that release.
 
 Please also cite the work it builds on:
 
 - G. F. Riley, T. R. Henderson, *The ns-3 Network Simulator*, Modeling and Tools for Network Simulation, pp. 15–34, 2010, [doi:10.1007/978-3-642-12331-3_2](https://doi.org/10.1007/978-3-642-12331-3_2). The simulator every image builds, configured and pre-built at /opt/ns-3.
 
-Using it in your work? Contributions are welcome, and citing it helps just as much.
+Using it in your work? Contributions are welcome, and citing the DOI helps just as much.
 <!-- org-sync:end citing -->
 
 ## Epics
