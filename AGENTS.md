@@ -31,7 +31,8 @@ test/downstream.{sh,txt}          the downstream canary and the org modules it b
 test/fixtures/                    swarm-hello (smoke), manet-canary (integration), profile-probe (profile); GPL-2.0-only
 .trivyignore, .hadolint.yaml      accepted Dockerfile findings; hadolint settings
 .github/workflows/                publish-images.yml (build, test by digest, promote, sign; `images gate`), container-security.yml,
-                                  pr-title.yml, candidates-cleanup.yml, licence.yml; .github/ISSUE_TEMPLATE/ (+ image-request.yml)
+                                  pr-title.yml, candidates-cleanup.yml, licence.yml, sync-labels.yml; org-managed: org-sync.yml,
+                                  review-gate.yml, dco.yml, scorecard.yml; .github/ISSUE_TEMPLATE/ (+ image-request.yml)
 ```
 
 Before you change one of these files, or need what a flag, stage or job does

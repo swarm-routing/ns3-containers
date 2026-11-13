@@ -47,7 +47,7 @@ org-tools:  # the same templates CI checks against: refreshed to ORG_REF every t
 	@git -C "$(ORG_DIR)" fetch -q --depth 1 origin $(ORG_REF) && git -C "$(ORG_DIR)" checkout -q --detach FETCH_HEAD
 
 headers: org-tools ## licence headers (org rule 1)
-	python3 -I "$(ORG_DIR)/tools/checks/check-headers.py" --dual docker/ --dual test/smoke.sh --dual test/run.sh --dual test/structure.sh --dual test/integration.sh --dual test/profile.sh --dual test/unit.sh --dual tools/ --dual .github/workflows/ .
+	python3 -I "$(ORG_DIR)/tools/checks/check-headers.py" --dual docker/ --dual test/smoke.sh --dual test/run.sh --dual test/structure.sh --dual test/integration.sh --dual test/profile.sh --dual test/unit.sh --dual test/downstream.sh --dual tools/ --dual .github/workflows/ .
 
 org-sync-check: org-tools ## org-managed files match the org templates
 	python3 -I "$(ORG_DIR)/tools/org-sync/org_sync.py" check .

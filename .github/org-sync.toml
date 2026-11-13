@@ -2,7 +2,7 @@
 kind = "container"
 forms = true
 title = "ns3-containers"
-dual = ["docker/", "test/smoke.sh", "test/run.sh", "test/structure.sh", "test/integration.sh", "test/profile.sh", "test/unit.sh", "tools/", ".github/workflows/"]
+dual = ["docker/", "test/smoke.sh", "test/run.sh", "test/structure.sh", "test/integration.sh", "test/profile.sh", "test/unit.sh", "test/downstream.sh", "tools/", ".github/workflows/"]
 ci_workflow = "publish-images.yml"
 posture = "the org's ns-3 development images (`ghcr.io/swarm-routing/ns3-dev`), used by every repository's CI"
 trust_boundary = """
