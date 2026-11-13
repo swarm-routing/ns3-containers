@@ -1,4 +1,7 @@
 # org-sync configuration (swarm-routing/.github tools/org-sync).
+# CITATION.cff seed and cite badge. Once Zenodo archives a release: set zenodo_concept = "<record id>"
+# (org-bot's zenodo task opens that PR; never typed).
+citation = true
 kind = "container"
 forms = true
 title = "ns3-containers"

@@ -1,0 +1,40 @@
+# Citation File Format (https://citation-file-format.github.io), seeded by
+# swarm-routing/.github org-sync (`citation = true`; `citation_type` and
+# `[[references]]` in .github/org-sync.toml); the repository's own once
+# written. Commitizen keeps `version:` in step (`.cz.toml` version_files
+# "CITATION.cff:^version:"); swarm-routing/.github tools/zenodo reads the
+# concept DOI from `doi:` once the first release is archived on Zenodo.
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+title: "ns3-containers"
+abstract: >-
+  Pre-built, tested ns-3 images for contrib-module CI:
+  ghcr.io/swarm-routing/ns3-dev with the ns-3 tree configured and built:
+  debug, sanitized, default and optimized profiles on Ubuntu, debug and
+  default on Debian, debug on Alpine; signed and attested.
+type: software
+authors:
+  - family-names: Joppi
+    given-names: Daniel Henrique
+    orcid: "https://orcid.org/0009-0009-6436-8174"
+version: "0.0.0"
+# The work as a whole; docker/ test/smoke.sh test/run.sh test/structure.sh test/integration.sh test/profile.sh test/unit.sh test/downstream.sh tools/ .github/workflows/ also MIT OR GPL-2.0-only (LICENSING.md).
+license: GPL-2.0-only
+repository-code: "https://github.com/swarm-routing/ns3-containers"
+url: "https://github.com/swarm-routing/ns3-containers"
+references:
+  - type: book
+    title: "The ns-3 Network Simulator"
+    authors:
+      - family-names: "Riley"
+        given-names: "George F."
+      - family-names: "Henderson"
+        given-names: "Thomas R."
+    collection-title: "Modeling and Tools for Network Simulation"
+    start: "15"
+    end: "34"
+    year: 2010
+    publisher:
+      name: "Springer Berlin Heidelberg"
+    doi: "10.1007/978-3-642-12331-3_2"
+    notes: "The simulator every image builds, configured and pre-built at /opt/ns-3."

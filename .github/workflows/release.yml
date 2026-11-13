@@ -1,0 +1,54 @@
+# Copyright (c) 2026 Daniel Joppi (https://github.com/swarm-routing)
+# SPDX-License-Identifier: MIT OR GPL-2.0-only
+name: Release
+
+# The org release pipeline (swarm-routing/.github reusable-release.yml;
+# CONTRIBUTING "Cutting a release" there):
+#   dispatch `dry-run`  bump, build, attest and verify on the runner only;
+#   dispatch `bump`     open the PR `chore(release): bump version A to B`
+#                       from bot/release (Commitizen, .cz.toml);
+#   merge that PR       the release: `make dist` builds and checks the asset
+#                       (ns3-containers-<ver>.tar.gz, the image pipeline's
+#                       source; tools/release/dist.sh), then SBOM, checksums,
+#                       signed provenance, the v<ver> tag and the GitHub release.
+# `increment` forces the bump (cz bump --increment, swarm-routing/.github#211):
+# MAJOR on the first dispatch makes it v1.0.0 (maintainer decision 2026-11-13);
+# auto (passed as ''), Commitizen reads it from the commits.
+# The release versions the image pipeline and its contract, not the images:
+# ghcr.io/swarm-routing/ns3-dev keeps its own tags (the ns-3 release) and is
+# published by publish-images.yml only, so there is no `image` job here.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "dry-run: bump, build, attest and verify on the runner only; bump: open the bump PR (merging it releases)"
+        type: choice
+        options: [dry-run, bump]
+        default: dry-run
+      increment:
+        description: "force the increment (cz bump --increment); auto: from the commits. MAJOR for the first release, v1.0.0"
+        type: choice
+        options: [auto, PATCH, MINOR, MAJOR]   # a choice option cannot be empty: auto is ''
+        default: auto
+  push:
+    branches: [main]   # the merged bump PR releases; any other push is a no-op
+permissions:
+  contents: read
+# One run per commit at a time, never cancelled (a later run must not replace
+# a merged bump's pending release).
+concurrency:
+  group: release-${{ github.sha }}
+  cancel-in-progress: false
+jobs:
+  release:
+    # Saves a runner on ordinary pushes; the workflow itself checks the PR.
+    if: "${{ github.event_name != 'push' || startsWith(github.event.head_commit.message, 'chore(release): bump version ') }}"
+    permissions: { contents: write, pull-requests: write, id-token: write, attestations: write }
+    uses: swarm-routing/.github/.github/workflows/reusable-release.yml@main
+    with:
+      mode: ${{ inputs.mode }}             # empty on push: release
+      increment: ${{ inputs.increment != 'auto' && inputs.increment || '' }}   # '' for auto and on push
+    secrets:
+      BOT_APP_ID: ${{ secrets.BOT_APP_ID }}
+      BOT_APP_PRIVATE_KEY: ${{ secrets.BOT_APP_PRIVATE_KEY }}
+      ORG_BOT_TOKEN: ${{ secrets.ORG_BOT_TOKEN }}
