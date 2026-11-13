@@ -25,6 +25,8 @@ tools/ns3_matrix.py               supported vs on-demand releases, base digests,
 tools/pr_tests.py                 which images and stages a PR tests (the `select` job)
 tools/pass_markers.py             promote's check: every test job passed, on one digest
 tools/cache_tags.py               which ns3-dev-cache tags the daily cleanup deletes (rule 14)
+tools/release/dist.sh             the release asset: the pipeline's source tarball, checked (`make dist`)
+.cz.toml, CITATION.cff            Commitizen config and the version it bumps; releases run through release.yml (the org reusable-release.yml)
 test/run.sh                       every test stage against one image ref (`--stages`, `--unit-shard`)
 test/{structure,profile,smoke,integration,unit}.sh   the stages: image contract, profile promise, smoke, simulation, ns-3 unit suites
 test/ns3-suites.txt, test/known-failures.txt   unit suites per profile (split, main-only), expected upstream failures
@@ -32,7 +34,7 @@ test/downstream.{sh,txt}          the downstream canary and the org modules it b
 test/fixtures/                    swarm-hello (smoke), manet-canary (integration), profile-probe (profile); GPL-2.0-only
 .trivyignore, .hadolint.yaml      accepted Dockerfile findings; hadolint settings
 .github/workflows/                publish-images.yml (build, test by digest, promote, sign; `images gate`), container-security.yml,
-                                  pr-title.yml, candidates-cleanup.yml, licence.yml, sync-labels.yml; org-managed: org-sync.yml,
+                                  pr-title.yml, release.yml, candidates-cleanup.yml, licence.yml, sync-labels.yml; org-managed: org-sync.yml,
                                   review-gate.yml, dco.yml, scorecard.yml; .github/ISSUE_TEMPLATE/ (+ image-request.yml)
 ```
 
@@ -58,6 +60,15 @@ The smoke must report a small Ninja step count (8 today, gate 40): a larger
 number means the warm cache was missed. Behind a TLS-intercepting proxy, build
 from a scratch copy of the Dockerfile with the proxy CA added; never commit
 that layer. The PR's own `publish-images` run is the authoritative check.
+
+Releases (swarm-routing/.github CONTRIBUTING "Cutting a release"): the
+version is the image pipeline's and its contract's (tags, profiles, bases,
+`ns3-build-contrib`), never an image tag, which stays the ns-3 release. On
+the maintainer's request only, dispatch `release.yml` with `dry-run`, then
+`bump` (the first release with `increment` MAJOR: v1.0.0, maintainer decision
+2026-11-13); merging the bot's `chore(release): bump version A to B` PR tags
+and publishes `make dist`'s tarball (`tools/release/dist.sh`; `DIST_CHECK=0`
+skips its check). The images keep `publish-images.yml`.
 
 ## Golden rules (invariants — do not break)
 

@@ -16,7 +16,7 @@ ORG_DIR   ?= $(HOME)/.cache/swarm-routing/dotgithub
 ORG_REF   ?= main
 
 .DEFAULT_GOAL := help
-.PHONY: help build test lint format check clean shell ci headers org-sync-check org-tools
+.PHONY: help build test lint format check clean shell ci headers org-sync-check org-tools dist
 
 help: ## list the targets
 	@awk 'BEGIN{FS=":.*## "} /^[a-zA-Z0-9_-]+:.*## /{printf "  %-16s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -55,3 +55,7 @@ org-sync-check: org-tools ## org-managed files match the org templates
 check: lint test headers org-sync-check ## everything CI gates on
 
 ci: check ## exactly what CI runs
+
+RELEASE_VERSION ?= $(shell sed -n 's/^version = "\(.*\)"/\1/p' .cz.toml)
+dist: ## the release asset in dist/: the image pipeline's source tarball, checked
+	tools/release/dist.sh $(RELEASE_VERSION) dist
