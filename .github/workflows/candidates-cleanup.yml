@@ -110,7 +110,15 @@ jobs:
             if grep -q 'HTTP 404' "$err"; then echo "no ns3-dev-cache package"; exit 0; fi
             cat "$err" >&2; exit 1
           fi
-          python3 tools/cache_tags.py --versions-file "$listing" --summary "$GITHUB_STEP_SUMMARY" >"$selected"
+          report="${RUNNER_TEMP}/cache-report.md"
+          if ! python3 tools/cache_tags.py <"$listing" >"$selected" 2>"$report"; then
+            cat "$report" >&2; exit 1
+          fi
+          cat "$report"
+          cat "$report" >> "$GITHUB_STEP_SUMMARY"
+          if grep -q '^- nothing deleted' "$report"; then
+            echo "::warning::ns3-dev-cache: $(grep -m1 -o '^- nothing deleted[^;]*' "$report" | cut -c3-)"
+          fi
           n=0; failed=0
           while read -r id tags; do
             if gh api -X DELETE "${base}/${id}" >/dev/null; then

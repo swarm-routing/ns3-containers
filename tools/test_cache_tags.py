@@ -7,7 +7,6 @@ import json
 import os
 import subprocess
 import sys
-import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
@@ -149,23 +148,19 @@ class Supported(unittest.TestCase):
 
 
 def run(version_rows, tags=LS_REMOTE):
-    """main() on a listing; tags=None reads upstream (git ls-remote), as the workflow does."""
-    with tempfile.TemporaryDirectory() as d:
-        vf, tf, sf = (os.path.join(d, n) for n in ("versions", "tags", "summary"))
-        with open(vf, "w") as f:
-            f.write("".join(json.dumps(r) + "\n" for r in version_rows))
-        with open(tf, "w") as f:
-            f.write("\n".join(tags or []))
-        out, err = io.StringIO(), io.StringIO()
-        with redirect_stdout(out), redirect_stderr(err):
-            rc = c.main(["--versions-file", vf, "--summary", sf, *([] if tags is None else ["--tags-file", tf])])
-        with open(sf) as f:
-            return rc, out.getvalue(), f.read(), err.getvalue()
+    """main() on a listing -> (exit status, stdout, stderr); tags: what `git ls-remote` prints, or its error."""
+    out, err = io.StringIO(), io.StringIO()
+    stdin = io.StringIO("".join(json.dumps(r) + "\n" for r in version_rows))
+    ls = mock.Mock(side_effect=tags) if isinstance(tags, Exception) else mock.Mock(return_value=tags)
+    with mock.patch.object(c.ns3_matrix, "ls_remote", ls), mock.patch.object(sys, "stdin", stdin), \
+            redirect_stdout(out), redirect_stderr(err):
+        rc = c.main()
+    return rc, out.getvalue(), err.getvalue()
 
 
 class Cli(unittest.TestCase):
     def test_prints_one_line_per_version_to_delete_and_summarises(self):
-        rc, out, summary, _ = run(versions([[t] for t in ISSUE_146]))
+        rc, out, summary = run(versions([[t] for t in ISSUE_146]))
         self.assertEqual(rc, 0)
         lines = out.splitlines()
         self.assertEqual(len(lines), 30)
@@ -179,27 +174,25 @@ class Cli(unittest.TestCase):
         self.assertIn("to delete: 30", summary)
 
     def test_an_unparsed_tag_is_named_in_the_summary(self):
-        rc, out, summary, _ = run(versions([["3.49-ubuntu-debug"], ["3.48-ubuntu-debug"], ["what-is-this"]]))
+        rc, out, summary = run(versions([["3.49-ubuntu-debug"], ["3.48-ubuntu-debug"], ["what-is-this"]]))
         self.assertEqual((rc, out), (0, "101 3.48-ubuntu-debug\n"))
         self.assertIn("not `<ver>-<base>-<profile>`, kept: `what-is-this`", summary)
 
     def test_no_upstream_release_deletes_nothing_and_says_so(self):
-        rc, out, summary, err = run(versions([[t] for t in ISSUE_146]), tags=["x\trefs/tags/ns-3.50-RC1"])
+        rc, out, summary = run(versions([[t] for t in ISSUE_146]), tags=["x\trefs/tags/ns-3.50-RC1"])
         self.assertEqual((rc, out), (0, ""))
         self.assertIn("nothing deleted", summary)
         self.assertIn("supported release", summary)
-        self.assertIn("::warning::", err)
 
     def test_an_unreachable_upstream_deletes_nothing_and_says_so(self):
         boom = subprocess.CalledProcessError(128, "git", stderr="fatal: unable to access")
-        with mock.patch.object(c.ns3_matrix.subprocess, "run", side_effect=boom):
-            rc, out, summary, _ = run(versions([[t] for t in ISSUE_146]), tags=None)
+        rc, out, summary = run(versions([[t] for t in ISSUE_146]), tags=boom)
         self.assertEqual((rc, out), (0, ""))
         self.assertIn("nothing deleted", summary)
         self.assertIn("supported release", summary)
 
     def test_no_supported_scope_deletes_nothing_and_says_so(self):
-        rc, out, summary, _ = run(versions([[t] for t in ISSUE_146 if not t.startswith("3.49-")]))
+        rc, out, summary = run(versions([[t] for t in ISSUE_146 if not t.startswith("3.49-")]))
         self.assertEqual((rc, out), (0, ""))
         self.assertIn("nothing deleted: no scope of the supported release 3.49", summary)
 
@@ -209,6 +202,10 @@ class Cli(unittest.TestCase):
             with self.assertRaises(SystemExit) as cm:
                 run(rows + versions([["3.49-ubuntu-debug"]]))
             self.assertNotIn(cm.exception.code, (0, None))
+
+    def test_the_report_is_markdown_list_lines(self):
+        _, _, summary = run(versions([[t] for t in ISSUE_146]))
+        self.assertTrue(all(line.startswith("- ") for line in summary.splitlines()))
 
 
 if __name__ == "__main__":

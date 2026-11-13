@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT OR GPL-2.0-only
 """Select the buildx cache tags of releases ns-3 no longer supports.
 
-    tools/cache_tags.py --versions-file F [--tags-file T] [--summary FILE]
+    tools/cache_tags.py < versions > ids-to-delete 2> report
 
 The buildx registry cache, ghcr.io/swarm-routing/ns3-dev-cache, has one tag
 per scope, `<ver>-<base>-<profile>` (the `cache` of a tools/ns3_matrix.py
@@ -14,13 +14,16 @@ decision 2026-11-13). The scope an on-demand build of an older release
 writes goes the same way at the next cleanup: such a build is rare and its
 images are history, so its cache has no later reader.
 
-F holds the package's tagged versions, one JSON object per line:
-{"id": <version id>, "tags": [<tag>, ...]}. For each version to delete this
-prints `<id> <tag>[,<tag>...]` on stdout; the workflow deletes exactly those
-ids. It deletes nothing itself and never names another package.
+Standard input holds the package's tagged versions, one JSON object per
+line: {"id": <version id>, "tags": [<tag>, ...]}. For each version to delete
+this prints `<id> <tag>[,<tag>...]` on stdout; the workflow deletes exactly
+those ids. It deletes nothing itself and never names another package. What
+is kept and what is selected goes to stderr as Markdown list lines, which
+the workflow appends to the step summary. It takes no argument and opens no
+file.
 
 The supported release is read as ns3_matrix.py reads it, from upstream's
-tags (`git ls-remote`, or --tags-file for tests): never typed (rule 15).
+tags (`git ls-remote`): never typed (rule 15).
 
 What is kept, always:
   - a scope of the supported release;
@@ -30,20 +33,18 @@ What is kept, always:
     was read short): kept and reported;
   - a version one of whose tags is kept.
 
-Nothing is selected, and the summary and a workflow warning say why, when
+Nothing is selected, and the report says why (`nothing deleted: ...`, which
+the workflow also raises as a warning), when
 the supported release cannot be determined (upstream unreachable, no
 release tag), or when the package has no scope of the supported release
 (a new upstream release whose images are not built yet; this also covers a
 selection that would delete every tag). Exit status is 0 in those cases:
 the cleanup is retried the next day. A listing that does not have the shape
-above is an error (exit 1, nothing printed).
-
---summary FILE appends what is kept and what is selected (the step summary).
+above is an error (exit 1, nothing on stdout).
 """
 
 from __future__ import annotations
 
-import argparse
 import json
 import re
 import subprocess
@@ -103,17 +104,19 @@ def plan(versions, supported):
     return out
 
 
-def read_versions(path):
+def read_versions(lines):
     versions = []
-    with open(path) as f:
-        for n, line in enumerate(f, 1):
-            if not line.strip():
-                continue
+    for n, line in enumerate(lines, 1):
+        if not line.strip():
+            continue
+        try:
             v = json.loads(line)
-            if (not isinstance(v, dict) or type(v.get("id")) is not int or not isinstance(v.get("tags"), list)
-                    or not all(isinstance(t, str) for t in v["tags"])):
-                sys.exit(f"cache_tags: {path} line {n}: not {{\"id\": <int>, \"tags\": [<str>, ...]}}")
-            versions.append(v)
+        except ValueError:
+            v = None
+        if (not isinstance(v, dict) or type(v.get("id")) is not int or not isinstance(v.get("tags"), list)
+                or not all(isinstance(t, str) for t in v["tags"])):
+            sys.exit(f"cache_tags: line {n}: not {{\"id\": <int>, \"tags\": [<str>, ...]}}")
+        versions.append(v)
     return versions
 
 
@@ -121,23 +124,11 @@ def code(tags):
     return ", ".join(f"`{t}`" for t in sorted(tags)) or "none"
 
 
-def main(argv=None):
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--versions-file", required=True,
-                    help='the tagged versions, one {"id": N, "tags": [...]} per line')
-    ap.add_argument("--tags-file", help="upstream tag names, one per line (default: git ls-remote)")
-    ap.add_argument("--summary", help="append what is kept and selected to this file")
-    args = ap.parse_args(argv)
-
-    versions = read_versions(args.versions_file)
+def main():
+    versions = read_versions(sys.stdin)
     supported, why = None, ""
     try:
-        if args.tags_file:
-            with open(args.tags_file) as f:
-                lines = f.readlines()
-        else:
-            lines = ns3_matrix.ls_remote()
-        supported = supported_release(lines)
+        supported = supported_release(ns3_matrix.ls_remote())
     except (OSError, subprocess.SubprocessError) as e:
         why = f" ({type(e).__name__})"
     p = plan(versions, supported)
@@ -147,7 +138,6 @@ def main(argv=None):
     out = [f"ns3-dev-cache tags; supported release: {supported or 'unknown'}"]
     if p["refused"]:
         out.append(f"nothing deleted: {p['refused']}{why}; kept {len(kept)}: {code(kept)}")
-        print(f"::warning::ns3-dev-cache: nothing deleted: {p['refused']}{why}", file=sys.stderr)
     else:
         out.append(f"kept {len(scopes)}: {code(scopes)}")
         if p["unparsed"]:
@@ -155,10 +145,7 @@ def main(argv=None):
         if p["newer"]:
             out.append(f"newer than the supported release, kept: {code(p['newer'])}")
         out.append(f"to delete: {len(p['delete'])}")
-    print("\n".join(f"cache_tags: {line}" for line in out), file=sys.stderr)
-    if args.summary:
-        with open(args.summary, "a") as f:
-            f.write("".join(f"- {line}\n" for line in out))
+    print("".join(f"- {line}\n" for line in out), end="", file=sys.stderr)
     for v in p["delete"]:
         print(v["id"], ",".join(v["tags"]))
     return 0
