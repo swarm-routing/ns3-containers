@@ -8,7 +8,18 @@ name: Candidates cleanup
 #                  failed or cancelled run left, after 7 days.
 #   ns3-dev-cache  the buildx registry cache. Writing a cache tag leaves the
 #                  previous cache manifest untagged and unused; untagged
-#                  versions older than a day are deleted.
+#                  versions older than a day are deleted. A cache tag is one
+#                  scope, <ver>-<base>-<profile>; only the supported release
+#                  is built automatically, so the scopes of every other
+#                  release are deleted too (golden rule 14, ns3-containers#146;
+#                  maintainer decision 2026-11-13). tools/cache_tags.py
+#                  selects them, with the supported release read from
+#                  upstream's tags as tools/ns3_matrix.py reads it. The scope
+#                  an on-demand build of an older release writes is deleted
+#                  by the next run: no grace period. A tag that is not a
+#                  scope is kept and reported; when the supported release
+#                  cannot be determined, or the package has no scope of it,
+#                  nothing is deleted and the summary says so.
 # The published package, ns3-dev, is never touched: its untagged versions are
 # the child and attestation manifests of tagged images (ns3-containers#36).
 on:
@@ -24,6 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
+      contents: read   # checkout, for tools/cache_tags.py
       packages: write
     steps:
       - name: Harden the runner (audit egress)
@@ -75,4 +87,37 @@ jobs:
             if gh api -X DELETE "${base}/${id}" >/dev/null; then n=$((n + 1)); else failed=$((failed + 1)); fi
           done
           echo "deleted ${n} untagged cache versions created before ${cutoff}; ${failed} failed" >> "$GITHUB_STEP_SUMMARY"
+          [ "$failed" -eq 0 ]
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
+        with:
+          persist-credentials: false
+      # Only ns3-dev-cache: `base` is the one package path this step calls.
+      # The ids deleted are exactly the ones tools/cache_tags.py prints.
+      - name: Delete ns3-dev-cache tags of releases that are no longer supported
+        timeout-minutes: 10
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ORG: ${{ github.repository_owner }}
+        run: |
+          base="/orgs/${ORG}/packages/container/ns3-dev-cache/versions"
+          err="${RUNNER_TEMP}/gh-err-cache-tags"
+          listing="${RUNNER_TEMP}/cache-versions.jsonl"
+          selected="${RUNNER_TEMP}/cache-delete.txt"
+          if ! gh api --paginate "${base}?per_page=100" \
+                 --jq '.[] | select((.metadata.container.tags | length) > 0) | {id, tags: .metadata.container.tags}' \
+                 >"$listing" 2>"$err"; then
+            if grep -q 'HTTP 404' "$err"; then echo "no ns3-dev-cache package"; exit 0; fi
+            cat "$err" >&2; exit 1
+          fi
+          python3 tools/cache_tags.py --versions-file "$listing" --summary "$GITHUB_STEP_SUMMARY" >"$selected"
+          n=0; failed=0
+          while read -r id tags; do
+            if gh api -X DELETE "${base}/${id}" >/dev/null; then
+              n=$((n + 1)); echo "- deleted \`${tags}\`" >> "$GITHUB_STEP_SUMMARY"
+            else
+              failed=$((failed + 1)); echo "- FAILED to delete \`${tags}\` (version ${id})" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done <"$selected"
+          echo "- deleted ${n} cache tag versions; ${failed} failed" >> "$GITHUB_STEP_SUMMARY"
           [ "$failed" -eq 0 ]

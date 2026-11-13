@@ -97,8 +97,8 @@ name: Publish images
 # version x os x profile (`mode=max`), outside the 10 GB Actions cache. main
 # and same-repo PRs write it and push candidates; fork PRs only read.
 # Each clean run deletes its own candidates (the `discard` job, PRs included);
-# candidates-cleanup.yml sweeps leftovers after 7 days and the cache's
-# untagged versions daily. The only
+# candidates-cleanup.yml sweeps leftovers after 7 days and, daily, the cache's
+# untagged versions and the cache tags of unsupported releases. The only
 # workflow artifacts are one-line digest/pass markers, kept 1 day.
 #
 # The one check to require on main is `images gate`: the workflow runs on

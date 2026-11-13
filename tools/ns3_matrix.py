@@ -137,6 +137,12 @@ def parse_tags(lines):
     return {minor: full for minor, (_, full) in best.items()}
 
 
+def ls_remote():
+    """Upstream's ns-3.* tags, as `git ls-remote` prints them."""
+    return subprocess.run(["git", "ls-remote", "--tags", UPSTREAM, "ns-3.*"],
+                          check=True, capture_output=True, text=True).stdout.splitlines()
+
+
 def releases(versions):
     """All upstream releases, newest first, as (minor_str, full) pairs."""
     return [(f"3.{m}", versions[m]) for m in sorted(versions, reverse=True)]
@@ -337,8 +343,7 @@ def main(argv=None):
         with open(args.tags_file) as f:
             lines = f.readlines()
     else:
-        lines = subprocess.run(["git", "ls-remote", "--tags", UPSTREAM, "ns-3.*"],
-                               check=True, capture_output=True, text=True).stdout.splitlines()
+        lines = ls_remote()
     rel = releases(parse_tags(lines))
     if not rel:
         sys.exit("ns3_matrix: no ns-3 releases found upstream")
