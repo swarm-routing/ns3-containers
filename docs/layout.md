@@ -8,7 +8,7 @@ changes what it does.
 ```
 docker/Dockerfile                 BASE_IMAGE x NS3_VERSION x BUILD_PROFILE image
 tools/pass_markers.py             promote's check: every test job of an image passed, all on one digest (+ test_pass_markers.py)
-tools/ns3_matrix.py               supported release vs on-demand releases (`--tier latest`: the supported release only), base digests and tags, the PR representatives (+ test_ns3_matrix.py)
+tools/ns3_matrix.py               supported release vs on-demand releases (`--tier latest`: the supported release only), base digests and tags, the PR representatives; `--missing-only` (the weekly run): only a release with a required image's own versioned tag not yet published, the missing ones named in `--summary` (#149) (+ test_ns3_matrix.py)
 tools/pr_tests.py                 the PR test selection: which images and stages a pull request tests (`select` job; + test_pr_tests.py)
 docker/gcovr-requirements.in      gcovr's pin for the debug/sanitized images; docker/gcovr-requirements.txt: its hashed lock (uv pip compile, command in the .in)
 docker/scripts/build-contrib.sh   -> /usr/local/bin/ns3-build-contrib (--strict-warnings / --coverage [--quality-modules] through swarm-quality.cmake, the contrib targets only; ns-3.43+ and 3.36-3.42 target names)

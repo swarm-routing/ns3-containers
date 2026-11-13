@@ -76,7 +76,9 @@ name: Publish images
 #                                                      group's base, merge_group.base_sha), but
 #                                                      every image runs its full unit group
 #                                                      (golden rule 17: `light` is PR-only)
-#   schedule (weekly)                                  supported release, only if not yet published
+#   schedule (weekly)                                  supported release, only while a required image
+#                                                      of it has no versioned tag yet (--missing-only,
+#                                                      #149); the summary names the missing ones
 #   workflow_dispatch                                  `versions` (any release, on demand), else
 #                                                      the supported release; promote on main
 #   workflow_dispatch refresh: true                    OS security refresh (#29): the supported
@@ -243,7 +245,7 @@ jobs:
           args=(--sha "$GITHUB_SHA" --image "$IMAGE")
           [ -n "$VERSIONS" ] && args+=(--versions "$VERSIONS")
           [ "$REFRESH" = true ] && args+=(--tier latest)
-          [ "$MISSING_ONLY" = true ] && args+=(--missing-only)
+          [ "$MISSING_ONLY" = true ] && args+=(--missing-only --summary "$GITHUB_STEP_SUMMARY")
           if [ "$IMAGES" = true ]; then
             matrix=$(python3 tools/ns3_matrix.py "${args[@]}")
           else
