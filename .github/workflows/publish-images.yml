@@ -100,7 +100,8 @@ name: Publish images
 # every pipeline on main starts by sweeping the leftovers older than 2 days,
 # the cache's untagged versions and the cache tags of unsupported releases
 # (the `sweep` job: candidates-cleanup.yml, also daily). The only
-# workflow artifacts are one-line digest/pass markers, kept 1 day.
+# workflow artifacts are one-line digest/pass markers, kept 2 days (the
+# window in which "re-run failed jobs" can still promote by digest).
 #
 # The one check to require on main is `images gate`: the workflow runs on
 # every pull request, so the gate always reports; it passes when every job
@@ -348,7 +349,7 @@ jobs:
           path: |
             marker/digest
             marker/build-run
-          retention-days: 1
+          retention-days: 2  # the re-run window: candidates live 2 days too
       - name: Restore Trivy's databases (resolve fetched them once)
         id: trivy
         if: env.WRITE_REGISTRY != 'true'
@@ -542,7 +543,7 @@ jobs:
         with:
           name: passed-${{ matrix.name }}--${{ matrix.part }}
           path: pass
-          retention-days: 1
+          retention-days: 2  # the re-run window: candidates live 2 days too
 
   promote:
     name: promote ${{ matrix.name }}
