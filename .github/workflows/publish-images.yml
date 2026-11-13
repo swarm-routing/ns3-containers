@@ -97,9 +97,11 @@ name: Publish images
 # version x os x profile (`mode=max`), outside the 10 GB Actions cache. main
 # and same-repo PRs write it and push candidates; fork PRs only read.
 # Each clean run deletes its own candidates (the `discard` job, PRs included);
-# candidates-cleanup.yml sweeps leftovers after 7 days and, daily, the cache's
-# untagged versions and the cache tags of unsupported releases. The only
-# workflow artifacts are one-line digest/pass markers, kept 1 day.
+# every pipeline on main starts by sweeping the leftovers older than 2 days,
+# the cache's untagged versions and the cache tags of unsupported releases
+# (the `sweep` job: candidates-cleanup.yml, also daily). The only
+# workflow artifacts are one-line digest/pass markers, kept 2 days (the
+# window in which "re-run failed jobs" can still promote by digest).
 #
 # The one check to require on main is `images gate`: the workflow runs on
 # every pull request, so the gate always reports; it passes when every job
@@ -142,6 +144,18 @@ env:
   WRITE_REGISTRY: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
 
 jobs:
+  # Development images go after 2 days (swarm-routing/.github#370, #152): every
+  # pipeline on main (push, schedule, dispatch) first sweeps the candidates
+  # older than that and the cache's untagged versions. A run's own candidates
+  # are younger, so the sweep never touches them; PRs and merge groups skip it.
+  sweep:
+    name: sweep candidates older than 2 days
+    if: github.event_name != 'pull_request' && github.event_name != 'merge_group' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/candidates-cleanup.yml
+
   resolve:
     name: resolve the ns-3 release(s)
     runs-on: ubuntu-latest
@@ -335,7 +349,7 @@ jobs:
           path: |
             marker/digest
             marker/build-run
-          retention-days: 1
+          retention-days: 2  # the re-run window: candidates live 2 days too
       - name: Restore Trivy's databases (resolve fetched them once)
         id: trivy
         if: env.WRITE_REGISTRY != 'true'
@@ -529,7 +543,7 @@ jobs:
         with:
           name: passed-${{ matrix.name }}--${{ matrix.part }}
           path: pass
-          retention-days: 1
+          retention-days: 2  # the re-run window: candidates live 2 days too
 
   promote:
     name: promote ${{ matrix.name }}
@@ -857,8 +871,9 @@ jobs:
     # Every run, PRs included, deletes the candidates it pushed once nothing
     # needs them: after a clean run (tests passed, or select chose none, and,
     # on main, the tags were copied). A run with a failure keeps them, so "re-run failed jobs" can
-    # still promote by digest; candidates-cleanup.yml removes those after 7
-    # days. Fork PRs push no candidate.
+    # still promote by digest within 2 days; then the `sweep` job or
+    # candidates-cleanup.yml removes them, and a new run builds again. Fork
+    # PRs push no candidate.
     if: >-
       ${{ !cancelled() && needs.resolve.outputs.count != '0'
           && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)

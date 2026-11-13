@@ -5,7 +5,8 @@ name: Candidates cleanup
 # Two packages hold nothing anyone pulls:
 #   ns3-dev-ci     publish-images.yml's candidates. Each run deletes its own
 #                  once it is clean (its `discard` job); this sweeps whatever a
-#                  failed or cancelled run left, after 7 days.
+#                  failed or cancelled run left, after 2 days (development
+#                  images go after 2 days, swarm-routing/.github#370, #152).
 #   ns3-dev-cache  the buildx registry cache. Writing a cache tag leaves the
 #                  previous cache manifest untagged and unused; untagged
 #                  versions older than a day are deleted. A cache tag is one
@@ -22,10 +23,13 @@ name: Candidates cleanup
 #                  nothing is deleted and the summary says so.
 # The published package, ns3-dev, is never touched: its untagged versions are
 # the child and attestation manifests of tagged images (ns3-containers#36).
+# It runs as a job of every pipeline on main (publish-images.yml's `sweep`),
+# and daily, for the candidates of PR runs while main is quiet.
 on:
   schedule:
     - cron: '41 4 * * *'   # daily 04:41 UTC
   workflow_dispatch:
+  workflow_call:          # publish-images.yml's `sweep`, on main
 
 permissions:
   contents: read
@@ -43,13 +47,13 @@ jobs:
         timeout-minutes: 2  # its download and start take seconds (swarm-routing/.github#164)
         with:
           egress-policy: audit
-      - name: Delete ns3-dev-ci candidates older than 7 days
+      - name: Delete ns3-dev-ci candidates older than 2 days
         env:
           GH_TOKEN: ${{ github.token }}
           ORG: ${{ github.repository_owner }}
         run: |
           base="/orgs/${ORG}/packages/container/ns3-dev-ci/versions"
-          cutoff=$(date -u -d '7 days ago' +%Y-%m-%dT%H:%M:%SZ)
+          cutoff=$(date -u -d '2 days ago' +%Y-%m-%dT%H:%M:%SZ)
           err="${RUNNER_TEMP}/gh-err"
           if ! all=$(gh api --paginate "${base}?per_page=100" \
                        --jq '.[] | "\(.created_at) \(.id)"' 2>"$err"); then
