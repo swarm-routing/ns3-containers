@@ -18,7 +18,9 @@
 #   4. --strict-warnings judges the module's own code only: the fixture passes,
 #      a planted -Wshadow fails (in a source, and in its own header reached
 #      through the ns3/ include tree), a dependency left out by
-#      --quality-modules is not judged, and the build stays incremental;
+#      --quality-modules is not judged, a call to a [[deprecated]] function
+#      warns without failing (a dependency's two-step deprecation must not
+#      break a consumer, #167), and the build stays incremental;
 #   5. --coverage instruments the module: its .gcda files appear after the tests,
 #      and the image's gcovr (debug, sanitized) reports them.
 set -euo pipefail
@@ -93,6 +95,44 @@ if ns3-build-contrib --strict-warnings "$hpp" > "$log" 2>&1; then
 fi
 grep -q -- '-Werror=shadow' "$log" || { cat "$log"; echo "FAIL: the strict build failed, but not on -Wshadow" >&2; exit 1; }
 echo "smoke: --strict-warnings judges the module's own .hpp header through ns3/"
+
+# A call to a [[deprecated]] function stays a warning (#167): a dependency
+# that deprecates before it removes (swarm-core's two-step policy) must not
+# break its consumers' strict builds. The declaration sits in the module's own
+# header, reached through ns3/; the call is in its source.
+dep_call="$work/deprecated/swarm-hello"
+mkdir -p "$work/deprecated" && cp -r "$work/swarm-hello" "$dep_call"
+sed -i 's|#include "swarm-hello.h"|#include "ns3/swarm-hello.h"|' "$dep_call/model/swarm-hello.cc"
+sed -i 's|^}  // namespace ns3|[[deprecated("use SwarmHelloReadLe16")]] inline int SwarmHelloOld() { return 1; }\n&|' "$dep_call/model/swarm-hello.h"
+cat >> "$dep_call/model/swarm-hello.cc" <<'CXX'
+namespace ns3 {
+int SwarmHelloCallsOld() { return SwarmHelloOld(); }
+}  // namespace ns3
+CXX
+ns3-build-contrib --strict-warnings --test "$dep_call" > "$log" 2>&1 || {
+    cat "$log"; echo "FAIL: --strict-warnings made a deprecated call an error" >&2; exit 1; }
+# Strip colour codes first: GCC on Alpine colours the option name.
+esc=$(printf '\033')
+sed "s/${esc}\[[0-9;]*[mK]//g" "$log" | grep -q -- '\[-Wdeprecated-declarations\]' || {
+    cat "$log"; echo "FAIL: the deprecated call built without its warning" >&2; exit 1; }
+steps=$(steps_of "$log")
+if [ "${steps:-0}" -gt "$MAX_STEPS" ]; then
+    echo "FAIL: the deprecated-call build rebuilt the stock tree (${steps} steps)" >&2; exit 1
+fi
+echo "smoke: --strict-warnings keeps a deprecated call a warning"
+
+# The exception is that one warning only: the same module with a shadowed
+# local added still fails, on -Wshadow.
+cat >> "$dep_call/model/swarm-hello.cc" <<'CXX'
+namespace ns3 {
+int SwarmHelloShadowD(int x) { int y = x; { int y = 2; x += y; } return x + y; }
+}  // namespace ns3
+CXX
+if ns3-build-contrib --strict-warnings "$dep_call" > "$log" 2>&1; then
+    echo "FAIL: --strict-warnings accepted a shadowed local next to a deprecated call" >&2; exit 1
+fi
+grep -q -- '-Werror=shadow' "$log" || { cat "$log"; echo "FAIL: the strict build failed, but not on -Wshadow" >&2; exit 1; }
+echo "smoke: --strict-warnings still rejects a planted -Wshadow next to a deprecated call"
 
 # A private header that shares a stock header's name gets no wrapper: if it
 # did, it would shadow ns3/packet.h (pulled in by the fixture's test suite)
