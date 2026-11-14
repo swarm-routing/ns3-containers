@@ -111,7 +111,9 @@ int SwarmHelloCallsOld() { return SwarmHelloOld(); }
 CXX
 ns3-build-contrib --strict-warnings --test "$dep_call" > "$log" 2>&1 || {
     cat "$log"; echo "FAIL: --strict-warnings made a deprecated call an error" >&2; exit 1; }
-grep -q -- '\[-Wdeprecated-declarations\]' "$log" || {
+# Strip colour codes first: GCC on Alpine colours the option name.
+esc=$(printf '\033')
+sed "s/${esc}\[[0-9;]*[mK]//g" "$log" | grep -q -- '\[-Wdeprecated-declarations\]' || {
     cat "$log"; echo "FAIL: the deprecated call built without its warning" >&2; exit 1; }
 steps=$(steps_of "$log")
 if [ "${steps:-0}" -gt "$MAX_STEPS" ]; then
