@@ -15,7 +15,9 @@
 #                      note: a module outside the image's list is compiled here
 #   --run "PROG ARGS"  `./ns3 run` a program after the build (repeatable)
 #   --strict-warnings  compile the given modules (only) with -Wall -Wextra
-#                      -Wpedantic -Wshadow ... -Werror; ns-3's headers exempt
+#                      -Wpedantic -Wshadow ... -Werror; ns-3's headers exempt;
+#                      a deprecated call stays a warning
+#                      (-Wno-error=deprecated-declarations)
 #   --coverage         compile and link the given modules (only) with --coverage
 #                      (gcov); .gcda files land under $NS3DIR/cmake-cache
 #   --quality-modules "a;b"  apply the two options above to these modules only

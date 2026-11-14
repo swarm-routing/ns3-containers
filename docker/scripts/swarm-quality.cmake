@@ -10,7 +10,11 @@
 #   SWARM_CONTRIB_MODULES   ;-list of the contrib modules the options apply to
 #                           (their LIBNAME; dependencies built alongside are
 #                           left out by ns3-build-contrib --quality-modules)
-#   SWARM_STRICT_WARNINGS   ON: strict warnings as errors. The generated
+#   SWARM_STRICT_WARNINGS   ON: strict warnings as errors, except
+#                           -Wdeprecated-declarations, which stays a warning
+#                           (a dependency's two-step deprecation must not break
+#                           a consumer: swarm-routing/ns3-swarm-core
+#                           docs/api-policy.md, #167). The generated
 #                           include tree (ns-3's and other modules' headers)
 #                           is -isystem for these targets, so only the
 #                           module's own code is judged; the module's own
@@ -81,7 +85,8 @@ function(_swarm_quality_apply)
         target_include_directories(${t} SYSTEM PRIVATE ${_gen})
         target_compile_options(${t} PRIVATE
           -Wall -Wextra -Wpedantic -Wshadow -Wnon-virtual-dtor -Wold-style-cast
-          -Wcast-align -Woverloaded-virtual -Wnull-dereference -Wformat=2 -Werror)
+          -Wcast-align -Woverloaded-virtual -Wnull-dereference -Wformat=2 -Werror
+          -Wno-error=deprecated-declarations)
       endif()
       if(SWARM_COVERAGE)
         target_compile_options(${t} PRIVATE --coverage)

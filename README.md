@@ -131,7 +131,10 @@ stays incremental:
   -Wnon-virtual-dtor -Wold-style-cast -Wcast-align -Woverloaded-virtual
   -Wnull-dereference -Wformat=2 -Werror`; ns-3's headers are `-isystem` for
   them, so only the module's own code is judged (its own headers too, also
-  when included as `ns3/<header>.h`).
+  when included as `ns3/<header>.h`). A call to a `[[deprecated]]` API stays
+  a warning (`-Wno-error=deprecated-declarations`), so a dependency that
+  deprecates before it removes (swarm-core's two-step policy) does not break
+  the module's build (#167).
 - `--coverage` compiles and links them with `--coverage` (gcov); after
   `--test`, the `.gcda` files are under `/opt/ns-3/cmake-cache/contrib/<name>/`.
   The `debug` and `sanitized` images carry `gcovr` (pinned with hashes in
