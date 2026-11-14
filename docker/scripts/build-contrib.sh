@@ -42,7 +42,7 @@ NS3DIR=${NS3DIR:-/opt/ns-3}
 ENVFILE="$NS3DIR/.swarm-configure.env"
 
 die() { echo "ns3-build-contrib: $*" >&2; exit 2; }
-usage() { sed -n '5,29p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+usage() { sed -n '5,31p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
 
 [ -f "$ENVFILE" ] || die "$ENVFILE missing: not a swarm-routing ns3-dev image?"
 # shellcheck source=/dev/null
