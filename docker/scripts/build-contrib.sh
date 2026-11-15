@@ -15,7 +15,9 @@
 #                      note: a module outside the image's list is compiled here
 #   --run "PROG ARGS"  `./ns3 run` a program after the build (repeatable)
 #   --strict-warnings  compile the given modules (only) with -Wall -Wextra
-#                      -Wpedantic -Wshadow ... -Werror; ns-3's headers exempt
+#                      -Wpedantic -Wshadow ... -Werror; ns-3's headers exempt;
+#                      a deprecated call stays a warning
+#                      (-Wno-error=deprecated-declarations)
 #   --coverage         compile and link the given modules (only) with --coverage
 #                      (gcov); .gcda files land under $NS3DIR/cmake-cache
 #   --quality-modules "a;b"  apply the two options above to these modules only
@@ -40,7 +42,7 @@ NS3DIR=${NS3DIR:-/opt/ns-3}
 ENVFILE="$NS3DIR/.swarm-configure.env"
 
 die() { echo "ns3-build-contrib: $*" >&2; exit 2; }
-usage() { sed -n '5,29p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+usage() { sed -n '5,31p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
 
 [ -f "$ENVFILE" ] || die "$ENVFILE missing: not a swarm-routing ns3-dev image?"
 # shellcheck source=/dev/null
