@@ -29,7 +29,8 @@
 # Then it checks what it built, so a release never ships a tree that does not
 # work (the workflow stops before signing or tagging on a non-zero exit): in
 # the unpacked tarball, every shell script parses (bash -n), the tools' unit
-# tests pass and test/downstream.sh --check accepts the consumer list. No
+# tests pass and test/downstream.sh --check accepts the consumer list (with
+# swarm-routing/.github's script, ORG_TOOLS_DIR or ../.github, else cloned). No
 # docker: an image build is publish-images.yml's (8-15 min per image).
 # DIST_CHECK=0 skips the check (a quick local build).
 set -euo pipefail
@@ -83,5 +84,14 @@ tar -xzf "$out/$name.tar.gz" -C "$tmp/check"
 cd "$tmp/check/$name"
 while IFS= read -r -d '' f; do bash -n "$f"; done < <(find . -name '*.sh' -print0)
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools
-test/downstream.sh --check
+# test/downstream.sh wraps swarm-routing/.github tools/downstream/downstream.sh
+# (swarm-routing/.github#482), which the tarball does not carry: the original
+# repository's ORG_TOOLS_DIR or ../.github, else a shallow clone of its main
+# (a release runner has only this repository checked out).
+org=${ORG_TOOLS_DIR:-$repo/../.github}
+if [ ! -f "$org/tools/downstream/downstream.sh" ]; then
+    git clone -q --depth 1 https://github.com/swarm-routing/.github.git "$tmp/org-tools"
+    org=$tmp/org-tools
+fi
+ORG_TOOLS_DIR=$org test/downstream.sh --check
 echo "dist.sh: $name.tar.gz unpacks, its scripts parse, its tools' tests pass, its consumer list holds"

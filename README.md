@@ -280,13 +280,18 @@ listed in [`test/downstream.txt`](test/downstream.txt) is built and tested on
 the new ubuntu `debug` candidate by `test/downstream.sh <image>`: today all
 seven lines are built and tested: `ns3-swarm-core` (`swarm-core`), `ns3-tools`
 (`routing-bench` + its stock-arm delivery check, without `aodv` while #35
-lasts), AntHocNet (its six modules staged by `make install-ns3`, its suites
-and `anthocnet-example`), and ARA, BeeAdHoc, Termite and HOPNET (each
+lasts), AntHocNet (its seven modules, swarm-core included, staged by
+`make install-ns3`, its suites and `anthocnet-example`), and ARA, BeeAdHoc, Termite and HOPNET (each
 protocol's `ns3/` module on `swarm-core`, its own suite). A line whose module
 directory does not exist yet is skipped with the reason, so a repository can
 be listed before it has an `ns3/` module. Each consumer runs in a fresh container
 under a wall-clock budget, at the commit of its `main` shown in the step
 summary.
+The script is swarm-routing/.github's `tools/downstream/downstream.sh`
+(`test/downstream.sh` is its wrapper): a library's release dry run runs the
+same script on that library's consumers against its candidate
+(swarm-routing/.github#482). Locally, check swarm-routing/.github out next to
+this repository (or set `ORG_TOOLS_DIR`).
 
 - **The contract for a consumer:** one line in `test/downstream.txt`
   (`name | owner/repo@ref | ns-3 range | modules | suites | stage | run`), or

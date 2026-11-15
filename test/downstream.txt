@@ -32,7 +32,7 @@
 
 ns3-swarm-core | swarm-routing/ns3-swarm-core@main | 3.42+ | swarm-core=ns3-swarm-core | | |
 ns3-tools | swarm-routing/ns3-tools@main | 3.42+ | routing-bench=ns3-tools/ns3/routing-bench | | | bash tools/checks/check-stock-arms.sh /opt/ns-3 "olsr dsdv hwmp"
-AntHocNet | swarm-routing/AntHocNet@main | 3.36+ | routing-bench=AntHocNet/.stage/contrib/routing-bench oracle=AntHocNet/.stage/contrib/oracle aomdv=AntHocNet/.stage/contrib/aomdv gpsr=AntHocNet/.stage/contrib/gpsr adaptive=AntHocNet/.stage/contrib/adaptive anthocnet=AntHocNet/.stage/contrib/anthocnet | anthocnet oracle adaptive routing-bench | mkdir -p .stage/contrib && touch .stage/CMakeLists.txt && make -s install-ns3 NS3DIR="$PWD/.stage" | cd /opt/ns-3 && ./ns3 run --no-build anthocnet-example
+AntHocNet | swarm-routing/AntHocNet@main | 3.36+ | swarm-core=AntHocNet/.stage/contrib/swarm-core routing-bench=AntHocNet/.stage/contrib/routing-bench oracle=AntHocNet/.stage/contrib/oracle aomdv=AntHocNet/.stage/contrib/aomdv gpsr=AntHocNet/.stage/contrib/gpsr adaptive=AntHocNet/.stage/contrib/adaptive anthocnet=AntHocNet/.stage/contrib/anthocnet | anthocnet oracle adaptive routing-bench | mkdir -p .stage/contrib && touch .stage/CMakeLists.txt && make -s install-ns3 NS3DIR="$PWD/.stage" | cd /opt/ns-3 && ./ns3 run --no-build anthocnet-example
 ARA | swarm-routing/ARA@main | 3.42+ | swarm-core=ns3-swarm-core ara=ARA/ns3 | | |
 BeeAdHoc | swarm-routing/BeeAdHoc@main | 3.42+ | swarm-core=ns3-swarm-core beeadhoc=BeeAdHoc/ns3 | | |
 Termite | swarm-routing/Termite@main | 3.42+ | swarm-core=ns3-swarm-core termite=Termite/ns3 | | |
