@@ -30,7 +30,7 @@ tools/release/dist.sh             the release asset: the pipeline's source tarba
 test/run.sh                       every test stage against one image ref (`--stages`, `--unit-shard`)
 test/{structure,profile,smoke,integration,unit}.sh   the stages: image contract, profile promise, smoke, simulation, ns-3 unit suites
 test/ns3-suites.txt, test/known-failures.txt   unit suites per profile (split, main-only), expected upstream failures
-test/downstream.{sh,txt}          the downstream canary and the org modules it builds (gates latest-*)
+test/downstream.{sh,txt}          the downstream canary (a wrapper of swarm-routing/.github tools/downstream/downstream.sh, swarm-routing/.github#482) and the org modules it builds (gates latest-*)
 test/fixtures/                    swarm-hello (smoke), manet-canary (integration), profile-probe (profile); GPL-2.0-only
 .trivyignore, .hadolint.yaml      accepted Dockerfile findings; hadolint settings
 .github/workflows/                publish-images.yml (build, test by digest, promote, sign; `images gate`), container-security.yml,
@@ -49,7 +49,7 @@ docker build -f docker/Dockerfile --build-arg NS3_VERSION=3.48 \
     --build-arg BUILD_PROFILE=debug -t ns3-dev:3.48-debug .        # ~8-15 min on 4 cores
 EXPECT_VERSION=3.48 EXPECT_PROFILE=debug EXPECT_OS=ubuntu \
     test/run.sh ns3-dev:3.48-debug                                 # every test stage, as CI runs them
-test/downstream.sh --check                                         # the consumer list parses (no docker)
+test/downstream.sh --check                                         # the consumer list parses (no docker; swarm-routing/.github checked out next to this repo, or ORG_TOOLS_DIR)
 test/downstream.sh ns3-dev:3.48-debug                              # every org module builds and passes on the image (latest-* gate)
 hadolint docker/Dockerfile                                       # reads .hadolint.yaml; exit 0 required
 shellcheck docker/scripts/build-contrib.sh test/*.sh

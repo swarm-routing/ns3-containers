@@ -245,7 +245,18 @@ jobs:
         with:
           path: ${{ runner.temp }}/trivy-cache
           key: ${{ steps.trivy.outputs.key }}
+      # test/downstream.sh runs swarm-routing/.github's tools/downstream/downstream.sh
+      # (one code path with the release dry run's consumer check, swarm-routing/.github#482)
+      - name: The org's downstream script
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: swarm-routing/.github
+          ref: main
+          path: org-tools
+          persist-credentials: false
       - name: Validate the downstream consumer list
+        env:
+          ORG_TOOLS_DIR: ${{ github.workspace }}/org-tools
         run: test/downstream.sh --check
       - name: Generate the matrix from upstream tags
         id: m
@@ -771,8 +782,18 @@ jobs:
           ref="${CANDIDATE}@${digest}"
           docker pull "$ref"
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
+      # test/downstream.sh runs swarm-routing/.github's tools/downstream/downstream.sh
+      # (one code path with the release dry run's consumer check, swarm-routing/.github#482)
+      - name: The org's downstream script
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: swarm-routing/.github
+          ref: main
+          path: org-tools
+          persist-credentials: false
       - name: Build and test the org's modules (test/downstream.txt)
         env:
+          ORG_TOOLS_DIR: ${{ github.workspace }}/org-tools
           REF: ${{ steps.pull.outputs.ref }}
           DOWNSTREAM_FAILED: ${{ runner.temp }}/downstream-failed
         run: test/downstream.sh "$REF"
