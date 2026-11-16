@@ -1,0 +1,95 @@
+# Copyright (c) 2026 Daniel Joppi (https://github.com/swarm-routing)
+# SPDX-License-Identifier: MIT OR GPL-2.0-only
+name: Regression in a release (RCAPA)
+description: Something that worked in a published release (GitHub release, Zenodo DOI, PyPI, vcpkg port) and broke after a change. Root cause analysis + corrective and preventive actions (CONTRIBUTING.md, "RCAPA"). Not for bugs that never reached a release, nor for ns-3 bugs.
+title: "[rcapa] <PREFIX>-NNN "
+labels: ["rcapa", "bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        An RCAPA is required only for a **regression in a published release**: the defect is in a released version, or was found against one (`git tag --contains <commit>` names a release). A bug or change that never reached a release is an ordinary *Bug report*; an upstream ns-3 bug uses *ns-3 bug (RCAPA)* in swarm-routing/ns3-tools (CONTRIBUTING.md, "RCAPA", the decision table).
+        File this in the repository that owns the defect. Replace `<PREFIX>` with that repository's prefix (CONTRIBUTING.md, "RCAPA") and `NNN` with the next free number in its `docs/rcapa/README.md`. The RCAPA document follows `docs/rcapa/_template.md`.
+        Write every reference in full: `swarm-routing/<repo>#N`, never a bare `#N`. Add `priority:*`, `model:*` and the area labels as for any other issue (root cause work: usually `model:opus-5.5`).
+        This ticket stays open until the corrective action is merged **and a release carries the fix**.
+  - type: input
+    id: releases
+    attributes:
+      label: Releases
+      description: Every published release seen to fail, the last one seen to pass, and how it is published, e.g. "v2.7.0 (Zenodo, vcpkg port) fails; v2.6.1 passes; introduced by <commit>".
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: >
+        Where it was found (repository, workflow, campaign, a user report) and who it touches:
+        the users of the release, numbers published from it, downstream repositories pinned to it.
+    validations:
+      required: true
+  - type: textarea
+    id: symptom
+    attributes:
+      label: Symptom
+      description: What goes wrong, observed, without the cause (a crash with its message, a changed `##RUN##` line, a failing test, a wrong output).
+    validations:
+      required: true
+  - type: textarea
+    id: reproducer
+    attributes:
+      label: Reproducer
+      description: Enough to rerun it with no chat history.
+      value: |
+        - Command:
+        - Release / commit, and image by tag and digest if one is involved:
+        - Seed / run:
+        - Expected (the last good release):
+        - Actual:
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: CI job links, logs, marker lines, source lines as `file:line` at a named commit, the commit that introduced it.
+    validations:
+      required: true
+  - type: input
+    id: ns3
+    attributes:
+      label: ns-3 (optional)
+      description: The ns-3 version and modules involved, if any. If the cause turns out to be upstream ns-3, it moves to an `NS3-NNN` ticket in swarm-routing/ns3-tools.
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Workaround
+      description: What users of the release can do until the fix ships, or "none".
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What this RCAPA covers (the regression, the corrective and preventive actions) and what it does not.
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      value: |
+        - [ ] RCAPA doc `docs/rcapa/rcapa-<short-description>.md` and its row in `docs/rcapa/README.md`
+        - [ ] 5 whys, each cited (a source line at a commit, a log, a run)
+        - [ ] Reproducer verified against the failing release and the last good one
+        - [ ] Corrective action merged (cross-repo form `swarm-routing/<repo>#N`)
+        - [ ] Preventive actions linked (a test or check that catches a recurrence)
+        - [ ] A release carries the fix (tag and DOI recorded in the RCAPA)
+    validations:
+      required: true
+  - type: textarea
+    id: depends
+    attributes:
+      label: Depends on
+      description: Cross-repo form `swarm-routing/<repo>#N`.
+  - type: textarea
+    id: refs
+    attributes:
+      label: References
+      description: Related issues and PRs in every repository, written in full.
