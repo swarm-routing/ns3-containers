@@ -18,20 +18,22 @@ tags. Images get **no RCAPA by default** (maintainer decision 2026-11-16): a
 broken image, a failing test stage or a consumer that stops building on a new
 image is an ordinary `bug` issue, and an upstream ns-3 bug met in an image is
 an `NS3-NNN` in swarm-routing/ns3-tools. An RCAPA applies **only when the
-defect is traced to the image's composition**: `docker/Dockerfile`,
-`docker/scripts/build-contrib.sh` (`ns3-build-contrib`), the shared configure
-line (golden rule 10) or the base image digest. Then it is a `CNT-NNN` here,
+defect is traced to the image's composition**: `docker/Dockerfile` and
+what it copies into the image (`docker/scripts/build-contrib.sh`, that is
+`ns3-build-contrib`; `docker/scripts/swarm-quality.cmake`;
+`docker/gcovr-requirements.txt`), the shared configure line (golden rule 10)
+or the base image digest. Then it is a `CNT-NNN` here,
 the repository that owns the Dockerfile.
 
 | | |
 |---|---|
-| Published as | promoted `ns3-dev` tags on ghcr.io; an RCAPA only for a defect in their composition (Dockerfile, `build-contrib.sh`, configure line, base image) |
+| Published as | promoted `ns3-dev` tags on ghcr.io; an RCAPA only for a defect in their composition (the Dockerfile and what it copies in: `build-contrib.sh`, `swarm-quality.cmake`, `gcovr-requirements.txt`; the configure line; the base image) |
 | ID prefix | `CNT-NNN` |
 | Ticket | an issue in swarm-routing/ns3-containers, form *Regression in a release (RCAPA)*, title `[rcapa] CNT-NNN <short description>`, labels `rcapa` and `bug`; name both images by tag **and** digest, and the composition change that caused it |
-| Verified by | `test/run.sh` on the failing digest and the last good one (structure, profile, smoke with its Ninja step-count gate, integration, unit), and the downstream canary (`test/downstream.sh`, ubuntu debug only; a consumer outside its ns-3 range or without its module directory is skipped and named in the job log) |
+| Verified by | `docker pull` of both images by digest, then `test/run.sh` on the failing digest and the last good one (structure, profile, smoke with its Ninja step-count gate, integration, unit), and the downstream canary (`test/downstream.sh`, ubuntu debug only; a consumer outside its ns-3 range or without its module directory is skipped and named in the job log) |
 | Corrective action | the composition fix; `publish-images.yml` builds a new candidate, tests it by digest and promotes it (golden rule 17) |
 | Preventive action | a test stage or assertion in `test/` (structure, profile or smoke) that fails on the bad composition, so `promote` never copies it again |
-| Closes when | a promoted image carries the fix (tag and digest recorded) **and** the consumer that found it builds green on it |
+| Closes when | a promoted image carries the fix (tag and digest recorded) **and** the check that found it is green on it: the consumer's build, or `test/run.sh` on the promoted digest when the image tests found it |
 
 ```mermaid
 sequenceDiagram
@@ -60,7 +62,7 @@ sequenceDiagram
 2. Copy [`_template.md`](_template.md) to `rcapa-<short-description>.md`
    (lowercase, hyphens: what breaks, not where it was found), and add its row
    to the index in the same pull request.
-3. The ticket stays open until a promoted image carries the fix and the consumer builds green on it; record the tag and digest in the index.
+3. The ticket stays open until a promoted image carries the fix and the check that found it (the consumer's build, or `test/run.sh`) is green on it; record the tag and digest in the index.
 
 ## What an RCAPA answers
 
