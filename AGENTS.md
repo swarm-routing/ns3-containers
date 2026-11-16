@@ -43,6 +43,9 @@ in detail, read its line in [`docs/layout.md`](docs/layout.md).
 
 ## Build & verify
 
+The step-by-step version for people (prerequisites, every command, the CI
+map, troubleshooting) is [`docs/development.md`](docs/development.md).
+
 ```bash
 python3 -m unittest discover -s tools                               # matrix generator
 docker build -f docker/Dockerfile --build-arg NS3_VERSION=3.48 \
