@@ -54,12 +54,14 @@ protocol repositories, not this one.
 One image, locally:
 
 ```bash
-make build    # docker buildx build --load -f docker/Dockerfile -t local/ns3-containers:dev .
-docker build -f docker/Dockerfile --build-arg NS3_VERSION=3.48 \
+make build PLATFORM=linux/amd64    # docker buildx build --load --platform linux/amd64 -f docker/Dockerfile -t local/ns3-containers:dev .
+docker build --platform linux/amd64 -f docker/Dockerfile --build-arg NS3_VERSION=3.48 \
     --build-arg BUILD_PROFILE=debug -t ns3-dev:3.48-debug .      # a given release and profile
 ```
 
-`BASE_IMAGE` selects the base (Ubuntu 24.04 by default, Debian 13, Debian 13
+The published images are `linux/amd64`; without `--platform` Docker
+builds for its own platform (`linux/arm64` on Apple silicon). `BASE_IMAGE`
+selects the base (Ubuntu 24.04 by default, Debian 13, Debian 13
 slim, Alpine); the README's "Building the images" lists the arguments.
 `make dist` builds the release's source tarball.
 
@@ -107,7 +109,7 @@ is no `.devcontainer/`.
 
 ```bash
 make lint                                   # shellcheck on every .sh, then actionlint
-docker run --rm -i hadolint/hadolint < docker/Dockerfile   # what the hadolint job runs; reads .hadolint.yaml when mounted
+docker run --rm -i -v "$PWD/.hadolint.yaml:/.hadolint.yaml:ro" hadolint/hadolint < docker/Dockerfile   # the hadolint job, with its config
 make headers                                # licence headers (fetches the org tools)
 make org-sync-check
 make check                                  # lint, test (builds an image), headers, org-sync
