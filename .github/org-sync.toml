@@ -3,6 +3,8 @@
 # (org-bot's zenodo task opens that PR; never typed).
 citation = true
 kind = "container"
+# bestpractices.dev project (OpenSSF Best Practices badge; id read from the site's public JSON, swarm-routing/.github#531)
+bestpractices_project = "16818"
 # the Zenodo concept record, read from Zenodo by swarm-routing/.github tools/zenodo/zenodo.py record (#232)
 zenodo_concept = "24202109"
 forms = true
