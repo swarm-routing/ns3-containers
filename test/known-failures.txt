@@ -10,4 +10,10 @@
 # exact ns-3 version, so a point release or the next release is tested
 # without the exception. Every entry shows in the step summary. Remove an
 # entry when its ns-3 release stops being the supported one.
+#
+# An upstream ns-3 bug also has its row in the org's register,
+# swarm-routing/ns3-tools docs/ns3-bugs.md, and a root-cause record
+# (docs/ns3-rcapa/): name its NS3-NNN in a comment line above the entry.
+# NS3-001: ns-3.49 AODV ICMP livelock (swarm-routing/ns3-tools docs/ns3-bugs.md,
+# docs/ns3-rcapa/ns3-rcapa-aodv-icmp-livelock.md)
 3.49 sparse-aodv ns3-containers#35 timeout
