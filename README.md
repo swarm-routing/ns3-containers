@@ -7,7 +7,7 @@
 | Quality | [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=swarm-routing_ns3-containers&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=swarm-routing_ns3-containers) [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=swarm-routing_ns3-containers&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=swarm-routing_ns3-containers) [![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/swarm-routing/ns3-containers?utm_source=oss&utm_medium=github&utm_campaign=swarm-routing%2Fns3-containers&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)](https://coderabbit.ai) |
 | Release | [![Release](https://img.shields.io/github/v/release/swarm-routing/ns3-containers?sort=semver&cacheSeconds=1800)](https://github.com/swarm-routing/ns3-containers/releases) [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24202109.svg)](https://doi.org/10.5281/zenodo.24202109) [![Cite](https://img.shields.io/badge/cite-CITATION.cff-blue)](CITATION.cff) [![Licence: MIT OR GPL-2.0-only tooling](https://img.shields.io/badge/licence-MIT%20OR%20GPL--2.0--only%20tooling-blue)](LICENSING.md) |
 | Trust | [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/swarm-routing/ns3-containers/badge)](https://scorecard.dev/viewer/?uri=github.com/swarm-routing/ns3-containers) [![Images signed: cosign](https://img.shields.io/badge/images%20signed-cosign-success)](SECURITY.md#verifying-what-it-ships) |
-| Community & docs | [![Colony Arena: ns3-containers](https://img.shields.io/badge/Colony%20Arena-project%20page-orange)](https://swarm-routing.github.io/projects/ns3-containers/) [![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-yellow)](https://www.conventionalcommits.org) |
+| Community & docs | [![Colony Arena: ns3-containers](https://img.shields.io/badge/Colony%20Arena-project%20page-orange)](https://swarm-routing.github.io/projects/ns3-containers/) [![Open RCAPA](https://img.shields.io/github/issues/swarm-routing/ns3-containers/rcapa?label=open%20RCAPA&color=blue)](https://github.com/swarm-routing/ns3-containers/blob/main/docs/rcapa/README.md) [![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-yellow)](https://www.conventionalcommits.org) |
 <!-- org-sync:end badges -->
 
 Pre-built **ns-3** images for `swarm-routing` contrib modules:
@@ -373,6 +373,9 @@ the tools to install, how to get the code and its dependencies, how to
 build, test, run and lint it, the Docker images, what CI checks and how to
 read a red run. How changes are proposed, reviewed and released is the org's
 [CONTRIBUTING.md](https://github.com/swarm-routing/.github/blob/main/CONTRIBUTING.md).
+A regression in a released version gets an RCAPA (root cause analysis with
+corrective and preventive actions): [docs/rcapa/README.md](docs/rcapa/README.md)
+is this project's flow and its index.
 <!-- org-sync:end develop -->
 
 ## Epics

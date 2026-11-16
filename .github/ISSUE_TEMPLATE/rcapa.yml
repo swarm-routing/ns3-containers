@@ -1,9 +1,9 @@
 # Copyright (c) 2026 Daniel Joppi (https://github.com/swarm-routing)
 # SPDX-License-Identifier: MIT OR GPL-2.0-only
 name: ns-3 bug (RCAPA)
-description: A defect in upstream ns-3 (the simulator, not our code), or an investigation of one. Root cause analysis + corrective and preventive actions (CONTRIBUTING.md, "ns-3 bugs (RCAPA)").
+description: A defect in upstream ns-3 (the simulator, not our code), or an investigation of one, always gets an RCAPA. Root cause analysis + corrective and preventive actions (CONTRIBUTING.md, "ns-3 bugs (RCAPA)"). A regression in a release of our own code uses "Regression in a release (RCAPA)".
 title: "[rcapa] NS3-NNN "
-labels: ["rcapa", "verification", "ns3"]
+labels: ["rcapa", "ns3-upstream", "verification", "ns3"]
 body:
   - type: markdown
     attributes:
