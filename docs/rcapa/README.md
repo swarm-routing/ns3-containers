@@ -10,34 +10,44 @@ swarm-routing/ns3-tools. The org's rule and its decision table are in
 ([ADR-0003](https://github.com/swarm-routing/.github/blob/main/docs/adr/0003-rcapa-for-ns3-bugs-and-released-regressions.md)).
 This page is the project's flow and its index.
 
-<!-- Seeded by org-sync from swarm-routing/.github templates/rcapa/README.md;
-the repository's own from here. Replace every TODO with this project's facts
-(its AGENTS.md, release.yml and docs), then delete this comment. -->
-
 ## The flow for this project
+
+What this repository publishes is **images**: the
+`ghcr.io/swarm-routing/ns3-dev` tags promoted by `publish-images.yml` (each a
+copy of a digest every test stage passed, signed with cosign, with provenance
+and an SBOM), plus `v*` tags of the repository itself (GitHub release and
+Zenodo, concept DOI
+[10.5281/zenodo.24202109](https://doi.org/10.5281/zenodo.24202109)). A
+regression is an image or a tagged release that broke something that worked
+in the one before it: a contrib module that no longer builds with
+`ns3-build-contrib`, a profile that lost its promise, a changed configure
+line. A candidate that failed its tests was never promoted and needs no
+RCAPA. An upstream ns-3 bug met in an image is an `NS3-NNN` in
+swarm-routing/ns3-tools, never a `CNT` here.
 
 | | |
 |---|---|
-| Published as | TODO: the release channels this project ships (GitHub release + Zenodo DOI, PyPI, a vcpkg port, images, a site deploy, a dataset release, a plugin version), or "nothing yet: the flow starts at the first release" |
-| ID prefix | TODO: `<PREFIX>-NNN` (CONTRIBUTING "RCAPA", the prefix table) |
-| Ticket | an issue in swarm-routing/ns3-containers, form *Regression in a release (RCAPA)*, title `[rcapa] <PREFIX>-NNN <short description>`, labels `rcapa` and `bug` |
-| Verified by | TODO: the check, gate or reproducer that shows the regression and its fix |
-| Corrective action | TODO: the fix and its test, and how a fixed release is cut |
-| Preventive action | TODO: the check that would have caught it before the release |
-| Closes when | the fix is merged **and** a release of the channel above carries it |
+| Published as | promoted `ns3-dev` tags on ghcr.io (`<ver>-<profile>[-<os>]`, the immutable `-<sha7>` tags, `latest-*`), signed; `v*` tags of this repository: GitHub release + Zenodo DOI |
+| ID prefix | `CNT-NNN` |
+| Ticket | an issue in swarm-routing/ns3-containers, form *Regression in a release (RCAPA)*, title `[rcapa] CNT-NNN <short description>`, labels `rcapa` and `bug`; name the image by tag **and** digest |
+| Verified by | `test/run.sh` on the failing digest and the last good one (structure, profile, smoke with its Ninja step-count gate, integration, unit), and the downstream canary (`test/downstream.sh`: every org module builds and passes on the image) |
+| Corrective action | the fix PR; `publish-images.yml` builds a new candidate, tests it by digest and promotes it (golden rule 17); a regression that is an upstream bug becomes a `test/known-failures.txt` entry naming its `NS3-NNN` |
+| Preventive action | a test stage or assertion in `test/` that fails on the bad image, so `promote` never copies it again |
+| Closes when | the fix is merged **and** a promoted image carries it (tag and digest recorded), and a `v*` release when the defect was in a tagged release |
 
 ```mermaid
 sequenceDiagram
-    participant U as Reporter
+    participant C as Consumer CI
     participant T as RCAPA ticket
-    participant D as This page
+    participant S as test/run.sh and the downstream canary
     participant M as main
-    participant R as Release
-    U->>T: regression found against a release
-    T->>D: RCAPA document and index row
-    T->>M: fix and test, merged
-    M->>R: release that carries the fix
-    R->>T: tag and DOI recorded, ticket closed
+    participant I as Promoted image
+    C->>T: a promoted image breaks a build that passed on the one before
+    T->>S: reproduce on both digests
+    T->>M: fix and a test stage that fails on the bad image
+    M->>I: candidate built, tested by digest, promoted
+    I->>C: consumer runs green on the new digest
+    C->>T: tag and digest recorded, ticket closed
 ```
 
 ## Index
