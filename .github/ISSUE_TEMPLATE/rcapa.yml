@@ -1,0 +1,97 @@
+# Copyright (c) 2026 Daniel Joppi (https://github.com/swarm-routing)
+# SPDX-License-Identifier: MIT OR GPL-2.0-only
+name: ns-3 bug (RCAPA)
+description: A defect in upstream ns-3 (the simulator, not our code), or an investigation of one. Root cause analysis + corrective and preventive actions (CONTRIBUTING.md, "ns-3 bugs (RCAPA)").
+title: "[rcapa] NS3-NNN "
+labels: ["rcapa", "verification", "ns3"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        File this in **swarm-routing/ns3-tools**, which keeps the register: `docs/ns3-bugs.md` (the index) and one RCAPA per bug in `docs/ns3-rcapa/ns3-rcapa-<short-description>.md`.
+        Replace `NNN` in the title with the next free `NS3-NNN` ID of the index. Every workaround in any repository (a `test/known-failures.txt` XFAIL, an ns-3 version pin, a refused arm) links this ID.
+        Upstream reports (nsnam's tracker) are filed by the maintainer, under their own account; this issue holds the ready-to-file text.
+        Add `priority:*` and `model:*` labels as for any other issue (an RCAPA is root cause work: usually `model:opus-5.5`).
+  - type: input
+    id: versions
+    attributes:
+      label: ns-3 versions
+      description: Every release seen to fail, and the last one seen to pass, e.g. "3.49 fails, 3.48 passes; ns-3-dev master at <commit> fails".
+    validations:
+      required: true
+  - type: input
+    id: modules
+    attributes:
+      label: ns-3 modules
+      description: The upstream modules involved, e.g. `aodv`, `internet` (Ipv4L3Protocol, Icmpv4L4Protocol).
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: >
+        Where we met it (repository, workflow, campaign, arm) and why it matters to us (a
+        refused arm, invalidated numbers, a red image pipeline).
+    validations:
+      required: true
+  - type: textarea
+    id: symptom
+    attributes:
+      label: Symptom
+      description: What goes wrong, observed, without the cause (a hang, a crash with its message, wrong `##RUN##` numbers, a failing suite).
+    validations:
+      required: true
+  - type: textarea
+    id: reproducer
+    attributes:
+      label: Reproducer
+      description: Enough to rerun it with no chat history.
+      value: |
+        - Command:
+        - Image (`ghcr.io/swarm-routing/ns3-dev` tag and digest):
+        - Seed / run:
+        - Expected:
+        - Actual:
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: CI job links, logs, `##RUN##`/`##DIAG##` lines, upstream source lines as `file:line` at a named commit.
+    validations:
+      required: true
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Workaround in our repos
+      description: Every place that works around it (repository, file, PR), or "none yet".
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What this RCAPA covers (the bug, the investigation, the corrective actions in our repos) and what it does not.
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      value: |
+        - [ ] RCAPA doc in swarm-routing/ns3-tools `docs/ns3-rcapa/ns3-rcapa-<short-description>.md`
+        - [ ] Index row in swarm-routing/ns3-tools `docs/ns3-bugs.md`
+        - [ ] 5 whys, each cited (an upstream source line, a log, a run)
+        - [ ] Reproducer verified on `ns3-dev:latest` and on ns-3-dev master (commit recorded)
+        - [ ] Corrective and preventive actions linked (issues or PRs, cross-repo form `swarm-routing/<repo>#N`)
+        - [ ] Upstream report filed by the maintainer under their own account, or the decision not to recorded here
+    validations:
+      required: true
+  - type: textarea
+    id: depends
+    attributes:
+      label: Depends on
+      description: Cross-repo form `swarm-routing/<repo>#N`.
+  - type: textarea
+    id: refs
+    attributes:
+      label: References
+      description: Related issues and PRs in every repository, the upstream issue or merge request if one exists.
