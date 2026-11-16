@@ -22,7 +22,8 @@ regression is an image or a tagged release that broke something that worked
 in the one before it: a contrib module that no longer builds with
 `ns3-build-contrib`, a profile that lost its promise, a changed configure
 line. A candidate that failed its tests was never promoted and needs no
-RCAPA. An upstream ns-3 bug met in an image is an `NS3-NNN` in
+RCAPA, nor does a change made after the last promotion and tag and fixed
+before the next. An upstream ns-3 bug met in an image is an `NS3-NNN` in
 swarm-routing/ns3-tools, never a `CNT` here.
 
 | | |
@@ -30,10 +31,10 @@ swarm-routing/ns3-tools, never a `CNT` here.
 | Published as | promoted `ns3-dev` tags on ghcr.io (`<ver>-<profile>[-<os>]`, the immutable `-<sha7>` tags, `latest-*`), signed; `v*` tags of this repository: GitHub release + Zenodo DOI |
 | ID prefix | `CNT-NNN` |
 | Ticket | an issue in swarm-routing/ns3-containers, form *Regression in a release (RCAPA)*, title `[rcapa] CNT-NNN <short description>`, labels `rcapa` and `bug`; name the image by tag **and** digest |
-| Verified by | `test/run.sh` on the failing digest and the last good one (structure, profile, smoke with its Ninja step-count gate, integration, unit), and the downstream canary (`test/downstream.sh`: every org module builds and passes on the image) |
+| Verified by | `test/run.sh` on the failing digest and the last good one (structure, profile, smoke with its Ninja step-count gate, integration, unit), and the downstream canary (`test/downstream.sh`, ubuntu debug only: each consumer in `test/downstream.txt` builds and passes on the image; a consumer whose ns-3 range excludes the image, or whose module directory is absent, is skipped and the job log names it, so a green canary covers only the consumers it ran) |
 | Corrective action | the fix PR; `publish-images.yml` builds a new candidate, tests it by digest and promotes it (golden rule 17); a regression that is an upstream bug becomes a `test/known-failures.txt` entry naming its `NS3-NNN` |
 | Preventive action | a test stage or assertion in `test/` that fails on the bad image, so `promote` never copies it again |
-| Closes when | the fix is merged **and** a promoted image carries it (tag and digest recorded), and a `v*` release when the defect was in a tagged release |
+| Closes when | the fix is merged **and** the channel that had the defect carries it: a promoted image (tag and digest recorded) when the defect was in an image, a `v*` release (tag and DOI) when it was in what a tag ships without an image (its docs, its scripts outside the image) |
 
 ```mermaid
 sequenceDiagram
