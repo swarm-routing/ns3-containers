@@ -1,22 +1,22 @@
 # Copyright (c) 2026 Daniel Joppi (https://github.com/swarm-routing)
 # SPDX-License-Identifier: MIT OR GPL-2.0-only
 name: Regression in a release (RCAPA)
-description: Something that worked in a published release (GitHub release, Zenodo DOI, PyPI, vcpkg port) and broke after a change. Root cause analysis + corrective and preventive actions (CONTRIBUTING.md, "RCAPA"). Not for bugs that never reached a release, nor for ns-3 bugs.
+description: A regression in a published library, one another project consumes at a version (a swarm-core or ns3-tools release, a vcpkg port), or an image whose composition broke. Root cause analysis + corrective and preventive actions (CONTRIBUTING.md, "RCAPA"). Not for unreleased bugs, image bugs outside their composition, or ns-3 bugs.
 title: "[rcapa] <PREFIX>-NNN "
 labels: ["rcapa", "bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        An RCAPA is required only for a **regression in a published release**: the defect is in a released version, or was found against one (`git tag --contains <commit>` names a release). A bug or change that never reached a release is an ordinary *Bug report*; an upstream ns-3 bug uses *ns-3 bug (RCAPA)* in swarm-routing/ns3-tools (CONTRIBUTING.md, "RCAPA", the decision table).
-        File this in the repository that owns the defect. Replace `<PREFIX>` with that repository's prefix (CONTRIBUTING.md, "RCAPA") and `NNN` with the next free number in its `docs/rcapa/README.md`. The RCAPA document follows `docs/rcapa/_template.md`.
+        An RCAPA is required only for a **regression in a published library**: a version another project consumes (a swarm-core release through `swarm-core.lock` or the vcpkg baseline, an ns3-tools release through `ns3-tools.lock` or PyPI, a protocol core's vcpkg port, a port recipe at a registry baseline, any release a consumer pins by version) worked, and a later one broke. A Docker image qualifies only when its composition (Dockerfile, `build-contrib.sh`, configure line, base image) is the cause. A bug that never reached a published version, and any change in .github, the site, skills, benchmarks or ns3-upstream-report, is an ordinary *Bug report*; an upstream ns-3 bug uses *ns-3 bug (RCAPA)* in swarm-routing/ns3-tools (CONTRIBUTING.md, "RCAPA", the decision table).
+        A consumer that finds it (say AntHocNet after a swarm-core lock bump) files this in the **library's** repository, with its failing check as the reproducer. Replace `<PREFIX>` with that repository's prefix (CONTRIBUTING.md, "RCAPA") and `NNN` with the next free number in its `docs/rcapa/README.md`. The RCAPA document follows `docs/rcapa/_template.md`.
         Write every reference in full: `swarm-routing/<repo>#N`, never a bare `#N`. Add `priority:*`, `model:*` and the area labels as for any other issue (root cause work: usually `model:opus-5.5`).
         This ticket stays open until the corrective action is merged **and a release carries the fix**.
   - type: input
     id: releases
     attributes:
       label: Releases
-      description: Every published release seen to fail, the last one seen to pass, and how it is published, e.g. "v2.7.0 (Zenodo, vcpkg port) fails; v2.6.1 passes; introduced by <commit>".
+      description: The library version seen to fail and the last one seen to pass, and the consumer that pins it, e.g. "swarm-core v1.1.0 fails, v1.0.0 passes, in AntHocNet's swarm-core.lock bump (swarm-routing/AntHocNet#N); introduced by <commit>".
     validations:
       required: true
   - type: textarea
@@ -77,10 +77,10 @@ body:
       value: |
         - [ ] RCAPA doc `docs/rcapa/rcapa-<short-description>.md` and its row in `docs/rcapa/README.md`
         - [ ] 5 whys, each cited (a source line at a commit, a log, a run)
-        - [ ] Reproducer verified against the failing release and the last good one
+        - [ ] Reproducer verified against the failing release and the last good one (the consumer's failing check, when a consumer found it)
         - [ ] Corrective action merged (cross-repo form `swarm-routing/<repo>#N`)
         - [ ] Preventive actions linked (a test or check that catches a recurrence)
-        - [ ] A release carries the fix (tag and DOI recorded in the RCAPA)
+        - [ ] A release carries the fix (tag and DOI recorded in the RCAPA), and the consumer that found it runs green on it
     validations:
       required: true
   - type: textarea
