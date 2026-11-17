@@ -20,7 +20,8 @@ body:
         - ns3 (ns-3 build, versions, contrib module)
         - benchmark / harness (arenas, ns3-tool, datasets)
         - observability (##RUN##/##BENCH##/##DIAG## lines, probes)
-        - packaging / CI (images, reusable workflows, releases)
+        - packaging (images, install, releases)
+        - ci (CI workflows, reusable workflows, runners, checks)
         - learn-site (the Colony Arena site and games)
         - literature (papers, fidelity notes, equation Rosetta Stones)
         - documentation
